@@ -1,0 +1,21 @@
+# Example pipeline configuration (edit and pass with --config)
+inputs:
+  files:
+    - path/to/AlignmentResult_POS.csv
+    - path/to/AlignmentResult_NEG.csv
+
+processing:
+  missingness_threshold: 0.2   # max fraction missing per feature
+  rsd_qc_threshold: 0.3        # QC RSD cutoff
+  normalization: median        # options: median, tss, pqn, is
+  imputation: half_min         # options: half_min, knn
+  drift_correction: loess      # options: none, loess
+  batch_correction: none       # options: none, combat
+
+report:
+  enabled: true
+  output_dir: report
+  plots:
+    - pca
+    - missingness
+    - rsd

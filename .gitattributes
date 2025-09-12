@@ -1,0 +1,9 @@
+* text=auto eol=lf
+
+# Keep images/binaries as-is
+*.png -text
+*.jpg -text
+*.jpeg -text
+*.pdf -text
+*.zip -text
+*.7z -text
