@@ -5,6 +5,14 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
 
+# Optional pandas import for faster merging
+try:
+    import pandas as pd  # type: ignore
+
+    HAS_PANDAS = True
+except Exception:
+    HAS_PANDAS = False
+
 
 @dataclass
 class MSDialMetadata:
@@ -269,12 +277,15 @@ def list_alignment_files(input_dir: Path, recursive: bool = False) -> List[Path]
     return sorted({p.resolve() for p in files})
 
 
-def merge_folder_to_long_csv(input_dir: Path, output_csv: Path, recursive: bool = False) -> Dict[str, int]:
+def merge_folder_to_long_csv(input_dir: Path, output_csv: Path, recursive: bool = False, engine: str = "pandas") -> Dict[str, int]:
     """Merge all MS-DIAL tables in folder to one long-format CSV.
 
     Returns a summary dict with counts.
     """
     files = list_alignment_files(input_dir, recursive=recursive)
+    # Use pandas path if available and selected
+    if engine == "pandas" and HAS_PANDAS:
+        return _merge_folder_to_long_csv_pandas(files, output_csv)
     counts = {"files": len(files), "rows": 0}
     output_csv.parent.mkdir(parents=True, exist_ok=True)
 
@@ -301,3 +312,135 @@ def merge_folder_to_long_csv(input_dir: Path, output_csv: Path, recursive: bool 
                 counts["rows"] += 1
 
     return counts
+
+
+def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dict[str, int]:
+    rows_total = 0
+    frames: List["pd.DataFrame"] = []
+
+    # Helper functions reused from csv path
+    def count_msms_ions(msms: str) -> int:
+        if not isinstance(msms, str):
+            return 0
+        s = msms.strip().lower()
+        if s in {"", "null", "na", "none"}:
+            return 0
+        cnt = 0
+        for tok in s.split():
+            if ":" not in tok:
+                continue
+            try:
+                inten = float(tok.split(":", 1)[1])
+            except Exception:
+                continue
+            if inten > 0:
+                cnt += 1
+        return cnt
+
+    def assign_level(row: "pd.Series") -> str:
+        # Annotated if name not Unknown or MS/MS assigned TRUE
+        name = str(row.get("Metabolite name", "")).strip()
+        annotated = bool(name and name.lower() != "unknown")
+        if not annotated:
+            ms2 = str(row.get("MS/MS assigned", "")).strip().upper()
+            annotated = (ms2 == "TRUE")
+        if annotated:
+            try:
+                wdot = float(row.get("Weighted dot product", float("nan")))
+            except Exception:
+                wdot = float("nan")
+            try:
+                rdot = float(row.get("Reverse dot product", float("nan")))
+            except Exception:
+                rdot = float("nan")
+            try:
+                mcount = int(round(float(row.get("Matched peaks count", float("nan")))))
+            except Exception:
+                mcount = -1
+            if (pd.notna(wdot) and pd.notna(rdot) and mcount >= 3 and (wdot > 750) and (abs(wdot - rdot) < 200)):
+                return "1"
+            return "2"
+        return "3"
+
+    for p in files:
+        # Read with header row at index 4 (0-based), so header=4
+        try:
+            df = pd.read_csv(p, header=4, encoding="utf-8-sig")
+        except Exception:
+            # Fallback to python engine for odd quoting
+            df = pd.read_csv(p, header=4, encoding="utf-8-sig", engine="python")
+
+        # Determine sample columns: after 'MS/MS spectrum'
+        cols = list(df.columns)
+        if "MS/MS spectrum" in cols:
+            sample_start = cols.index("MS/MS spectrum") + 1
+        else:
+            sample_start = max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
+        sample_cols = cols[sample_start:]
+
+        # Filter features based on MS/MS ions count >= 3
+        df["_msms_ion_count"] = df.get("MS/MS spectrum", "").map(count_msms_ions)
+        df = df[df["_msms_ion_count"] >= 3].copy()
+
+        # Assign annotation level per feature
+        df["annotation_level"] = df.apply(assign_level, axis=1)
+
+        # Melt to long
+        id_cols = [
+            "Alignment ID",
+            "Average Rt(min)",
+            "Average Mz",
+            "Metabolite name",
+            "Adduct type",
+            "annotation_level",
+        ]
+        present_id_cols = [c for c in id_cols if c in df.columns]
+        long_df = df.melt(id_vars=present_id_cols, value_vars=sample_cols, var_name="sample_id", value_name="intensity")
+
+        # Add chrom/source_file columns at front
+        chrom = _infer_chrom_from_name(p.name)
+        long_df.insert(0, "source_file", p.name)
+        long_df.insert(0, "chrom", chrom)
+
+        # Rename columns to normalized names
+        rename_map = {
+            "Alignment ID": "alignment_id",
+            "Average Rt(min)": "rt_min",
+            "Average Mz": "mz",
+            "Metabolite name": "metabolite_name",
+            "Adduct type": "adduct",
+        }
+        long_df = long_df.rename(columns=rename_map)
+
+        # Keep exact output column order
+        out_cols = [
+            "chrom",
+            "source_file",
+            "annotation_level",
+            "alignment_id",
+            "rt_min",
+            "mz",
+            "metabolite_name",
+            "adduct",
+            "sample_id",
+            "intensity",
+        ]
+        # Some columns might be missing in rare files; ensure existence
+        for c in out_cols:
+            if c not in long_df.columns:
+                long_df[c] = ""
+        long_df = long_df[out_cols]
+
+        rows_total += len(long_df)
+        frames.append(long_df)
+
+    if frames:
+        merged = pd.concat(frames, ignore_index=True)
+    else:
+        merged = pd.DataFrame(columns=[
+            "chrom","source_file","annotation_level","alignment_id","rt_min","mz","metabolite_name","adduct","sample_id","intensity"
+        ])
+
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    merged.to_csv(output_csv, index=False)
+    return {"files": len(files), "rows": int(rows_total)}

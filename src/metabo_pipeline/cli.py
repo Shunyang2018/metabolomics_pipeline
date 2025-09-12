@@ -110,6 +110,7 @@ def merge(
     input_dir: str = typer.Argument(..., help="Folder containing MS-DIAL CSV/TXT files"),
     output_csv: str = typer.Option("outputs/merged_long.csv", help="Path to write merged long-format CSV"),
     recursive: bool = typer.Option(False, help="Recurse into subfolders"),
+    engine: str = typer.Option("pandas", help="Engine to use: pandas or csv", case_sensitive=False),
 ):
     """Merge HILIC/C18/Lipidomics files into one long-format CSV with chromatography and source file columns first."""
     in_dir = Path(input_dir)
@@ -118,7 +119,7 @@ def merge(
         raise typer.Exit(code=2)
     out = Path(output_csv)
     try:
-        summary = merge_folder_to_long_csv(in_dir, out, recursive=recursive)
+        summary = merge_folder_to_long_csv(in_dir, out, recursive=recursive, engine=engine.lower())
     except Exception as e:
         log.error(f"Failed to merge files from {in_dir}: {e}")
         raise typer.Exit(code=1)

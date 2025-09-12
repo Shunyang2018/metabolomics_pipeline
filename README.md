@@ -14,15 +14,21 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, perf
 - macOS/Linux:
   - `python3 -m venv .venv && source .venv/bin/activate`
 
-2) Install in editable mode (or use `pipx`)
-- `pip install -e .`
+2) Install in editable mode
+- With uv (recommended):
+  - `uv venv`
+  - `.venv\\Scripts\\Activate.ps1`  (Windows)  or `source .venv/bin/activate` (macOS/Linux)
+  - `uv pip install -e .`
+- With pip:
+  - `pip install -e .`
 
 3) Run CLI
 - `metabo --help`
 - Validate an MS-DIAL table:
   - `metabo validate --input M2_HILIC_NEG_nistannotated.csv`
-- Merge all files in a folder (HILIC/C18/Lipidomics) to long format:
-  - `metabo merge "F:\\Shunyang pipeline" --output outputs\\merged_long.csv`
+- Merge all files in a folder (HILIC/C18/Lipidomics) to long format with pandas:
+  - `metabo merge "F:\\Shunyang pipeline" --output outputs\\merged_long.csv --engine pandas`
+  - Fallback (no pandas): `metabo merge . --output outputs\\merged_long.csv --engine csv`
 
 ## Commands
 - `metabo init` — scaffold a config template and folders.
