@@ -1,0 +1,46 @@
+# --- OS junk ---
+.DS_Store
+Thumbs.db
+
+# --- Python build/venv ---
+__pycache__/
+*.py[cod]
+*.pyo
+.Python
+.venv/
+venv/
+env/
+.env
+.pytest_cache/
+.mypy_cache/
+dist/
+build/
+*.egg-info/
+
+# --- Tooling/coverage ---
+.coverage*
+coverage.xml
+.ruff_cache/
+.idea/
+.vscode/
+
+# --- Pipeline outputs ---
+logs/
+report/
+outputs/
+artifacts/
+
+# --- Project-specific: do NOT track input data ---
+# MS-DIAL alignment tables and other dataset files sitting in the repo root
+M2_*.csv
+
+# Any raw/processed data folders or archives
+M2 data/
+*.zip
+*.7z
+*.tar
+*.tar.gz
+
+# Allow small example templates if later added
+!examples/**
+!configs/**
