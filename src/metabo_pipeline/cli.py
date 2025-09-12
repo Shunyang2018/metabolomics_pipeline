@@ -111,7 +111,7 @@ def merge(
     output_csv: str = typer.Option("outputs/merged_long.csv", help="Path to write merged long-format CSV"),
     recursive: bool = typer.Option(False, help="Recurse into subfolders"),
 ):
-    """Merge HILIC/C18/Lipidomics and POS/NEG files into one long-format CSV with source annotations."""
+    """Merge HILIC/C18/Lipidomics files into one long-format CSV with chromatography and source file columns first."""
     in_dir = Path(input_dir)
     if not in_dir.exists() or not in_dir.is_dir():
         log.error(f"Input directory not found: {in_dir}")

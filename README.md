@@ -21,13 +21,13 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, perf
 - `metabo --help`
 - Validate an MS-DIAL table:
   - `metabo validate --input M2_HILIC_NEG_nistannotated.csv`
-- Merge all files in a folder (HILIC/C18/Lipidomics; POS/NEG) to long format:
+- Merge all files in a folder (HILIC/C18/Lipidomics) to long format:
   - `metabo merge "F:\\Shunyang pipeline" --output outputs\\merged_long.csv`
 
 ## Commands
 - `metabo init` — scaffold a config template and folders.
 - `metabo validate` — parse MS-DIAL alignment table(s), summarize samples/features, and check embedded metadata rows.
-- `metabo merge` — combine multiple alignment tables into one long-format CSV, annotating source (chromatography, polarity, filename).
+- `metabo merge` — combine multiple alignment tables into one long-format CSV, annotating source (chromatography and filename). New columns appear first: `chrom`, `source_file`.
 - `metabo run` — placeholder for the full pipeline (coming milestones M3–M7).
 - `metabo diag` — print environment info and versions.
 

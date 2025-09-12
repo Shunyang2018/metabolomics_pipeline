@@ -104,22 +104,15 @@ def summarize_alignment_table(path: Path) -> MSDialSummary:
 
 # --- Merging utilities ---
 
-def _infer_chrom_and_polarity_from_name(name: str) -> Tuple[str, str]:
+def _infer_chrom_from_name(name: str) -> str:
     n = name.lower()
-    chrom = "unknown"
     if "hilic" in n:
-        chrom = "HILIC"
-    elif "c18" in n:
-        chrom = "C18"
-    elif "lipid" in n:
-        chrom = "Lipidomics"
-
-    polarity = "unknown"
-    if "pos" in n:
-        polarity = "POS"
-    if "neg" in n:
-        polarity = "NEG"
-    return chrom, polarity
+        return "HILIC"
+    if "c18" in n:
+        return "C18"
+    if "lipid" in n:
+        return "Lipidomics"
+    return "unknown"
 
 
 def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
@@ -154,7 +147,7 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
     except ValueError:
         sample_start = max(30, idx_alignment + 1)
 
-    chrom, polarity = _infer_chrom_and_polarity_from_name(path.name)
+    chrom = _infer_chrom_from_name(path.name)
 
     # Stream remaining lines
     with path.open("r", encoding="utf-8-sig", newline="") as f:
@@ -173,9 +166,8 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
 
             for sample, val in zip(sample_names, row[sample_start:]):
                 yield {
-                    "source_file": path.name,
                     "chrom": chrom,
-                    "polarity": polarity,
+                    "source_file": path.name,
                     "alignment_id": alignment_id,
                     "rt_min": rt_min,
                     "mz": mz,
@@ -212,9 +204,8 @@ def merge_folder_to_long_csv(input_dir: Path, output_csv: Path, recursive: bool 
         w = csv.DictWriter(
             f_out,
             fieldnames=[
-                "source_file",
                 "chrom",
-                "polarity",
+                "source_file",
                 "alignment_id",
                 "rt_min",
                 "mz",
