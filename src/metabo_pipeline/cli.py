@@ -10,6 +10,7 @@ import typer
 
 from .io_msdial import summarize_alignment_table
 from .logging import get_logger
+from .io_msdial import merge_folder_to_long_csv
 
 app = typer.Typer(add_completion=False, help="Metabolomics pipeline for MS-DIAL outputs.")
 log = get_logger()
@@ -104,6 +105,27 @@ def diag():
     print(json.dumps(info, indent=2))
 
 
+@app.command()
+def merge(
+    input_dir: str = typer.Argument(..., help="Folder containing MS-DIAL CSV/TXT files"),
+    output_csv: str = typer.Option("outputs/merged_long.csv", help="Path to write merged long-format CSV"),
+    recursive: bool = typer.Option(False, help="Recurse into subfolders"),
+):
+    """Merge HILIC/C18/Lipidomics and POS/NEG files into one long-format CSV with source annotations."""
+    in_dir = Path(input_dir)
+    if not in_dir.exists() or not in_dir.is_dir():
+        log.error(f"Input directory not found: {in_dir}")
+        raise typer.Exit(code=2)
+    out = Path(output_csv)
+    try:
+        summary = merge_folder_to_long_csv(in_dir, out, recursive=recursive)
+    except Exception as e:
+        log.error(f"Failed to merge files from {in_dir}: {e}")
+        raise typer.Exit(code=1)
+
+    log.ok(f"Merged {summary['files']} files → {out}")
+    log.info(f"Total rows written: {summary['rows']}")
+
+
 if __name__ == "__main__":
     app()
-
