@@ -139,6 +139,7 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
     idx_mz = col_idx("Average Mz")
     idx_name = col_idx("Metabolite name")
     idx_adduct = col_idx("Adduct type")
+    idx_msms = col_idx("MS/MS spectrum")
 
     # Determine where sample intensities start
     try:
@@ -149,6 +150,28 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
 
     chrom = _infer_chrom_from_name(path.name)
 
+    def _count_msms_ions(msms: str) -> int:
+        if not msms:
+            return 0
+        s = msms.strip().lower()
+        if s in {"", "null", "na", "none"}:
+            return 0
+        # Expect space-separated mz:intensity pairs
+        count = 0
+        for tok in s.split():
+            if ":" not in tok:
+                continue
+            parts = tok.split(":", 1)
+            if len(parts) != 2:
+                continue
+            try:
+                inten = float(parts[1])
+            except Exception:
+                continue
+            if inten > 0:
+                count += 1
+        return count
+
     # Stream remaining lines
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         r = csv.reader(f)
@@ -157,6 +180,10 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
                 continue
             # Guard against short rows
             if len(row) <= sample_start:
+                continue
+            # Filter by MS/MS presence and minimum ions (>=3)
+            msms_val = row[idx_msms] if idx_msms >= 0 and idx_msms < len(row) else ""
+            if _count_msms_ions(msms_val) < 3:
                 continue
             alignment_id = row[idx_alignment] if idx_alignment >= 0 else ""
             rt_min = row[idx_rt] if idx_rt >= 0 else ""
