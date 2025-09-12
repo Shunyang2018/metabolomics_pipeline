@@ -140,6 +140,10 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
     idx_name = col_idx("Metabolite name")
     idx_adduct = col_idx("Adduct type")
     idx_msms = col_idx("MS/MS spectrum")
+    idx_msms_assigned = col_idx("MS/MS assigned")
+    idx_weighted_dot = col_idx("Weighted dot product")
+    idx_reverse_dot = col_idx("Reverse dot product")
+    idx_matched_peaks = col_idx("Matched peaks count")
 
     # Determine where sample intensities start
     try:
@@ -172,6 +176,51 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
                 count += 1
         return count
 
+    def _to_float(val: str) -> float | None:
+        try:
+            if val is None:
+                return None
+            v = str(val).strip()
+            if v == "" or v.lower() in {"null", "na", "none"}:
+                return None
+            return float(v)
+        except Exception:
+            return None
+
+    def _to_int(val: str) -> int | None:
+        f = _to_float(val)
+        if f is None:
+            return None
+        try:
+            return int(round(f))
+        except Exception:
+            return None
+
+    def _assign_annotation_level(row: List[str], metabolite_name: str) -> str:
+        # Determine if annotated: metabolite name not unknown
+        annotated = bool(metabolite_name and metabolite_name.strip().lower() != "unknown")
+        if not annotated:
+            # As a fallback, consider MS/MS assigned flag
+            if 0 <= idx_msms_assigned < len(row):
+                annotated = str(row[idx_msms_assigned]).strip().upper() == "TRUE"
+
+        if annotated:
+            wdot = _to_float(row[idx_weighted_dot]) if 0 <= idx_weighted_dot < len(row) else None
+            rdot = _to_float(row[idx_reverse_dot]) if 0 <= idx_reverse_dot < len(row) else None
+            mcount = _to_int(row[idx_matched_peaks]) if 0 <= idx_matched_peaks < len(row) else None
+            if (
+                wdot is not None
+                and rdot is not None
+                and mcount is not None
+                and wdot > 750
+                and abs(wdot - rdot) < 200
+                and mcount >= 3
+            ):
+                return "1"
+            return "2"
+        else:
+            return "3"
+
     # Stream remaining lines
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         r = csv.reader(f)
@@ -190,11 +239,13 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
             mz = row[idx_mz] if idx_mz >= 0 else ""
             name = row[idx_name] if idx_name >= 0 else ""
             adduct = row[idx_adduct] if idx_adduct >= 0 else ""
+            ann_level = _assign_annotation_level(row, name)
 
             for sample, val in zip(sample_names, row[sample_start:]):
                 yield {
                     "chrom": chrom,
                     "source_file": path.name,
+                    "annotation_level": ann_level,
                     "alignment_id": alignment_id,
                     "rt_min": rt_min,
                     "mz": mz,
@@ -233,6 +284,7 @@ def merge_folder_to_long_csv(input_dir: Path, output_csv: Path, recursive: bool 
             fieldnames=[
                 "chrom",
                 "source_file",
+                "annotation_level",
                 "alignment_id",
                 "rt_min",
                 "mz",
