@@ -140,6 +140,15 @@ def merge(
         post = summary.get("rows")
         drop = summary.get("dedup_dropped")
         log.info(f"Dedup — pre: {pre}, post: {post}, dropped: {drop}")
+        # Per-file breakdown
+        per_file = summary.get("per_file", [])
+        if per_file:
+            log.info("Per-file stats:")
+            for rec in per_file:
+                log.info(
+                    f" - {rec.get('file')}: raw={rec.get('raw')}, "
+                    f"MS/MS={rec.get('after_msms')}, S/N={rec.get('after_snr')}, pass_all={rec.get('after_pass_all')}"
+                )
     else:
         # For long: 'rows' are long rows
         log.info(f"Rows written: {summary['rows']}")
