@@ -495,6 +495,9 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
 
     files = list_alignment_files(input_dir, recursive=recursive)
     frames: List["pd.DataFrame"] = []
+    # Stats
+    totals = {"raw": 0, "after_msms": 0, "after_snr": 0, "after_pass_all": 0}
+    per_file_stats: List[Dict[str, int]] = []
 
     def count_msms_ions(msms: str) -> int:
         if not isinstance(msms, str):
@@ -575,8 +578,12 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             sample_start = max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
         sample_cols = cols[sample_start:]
 
+        # Stats: raw feature count
+        raw_count = int(df.shape[0])
+
         df["_msms_ion_count"] = df.get("MS/MS spectrum", "").map(count_msms_ions)
-        df = df[df["_msms_ion_count"] >= 3].copy()
+        df = df[df["_msms_ion_count"] >= MSMS_MIN_IONS].copy()
+        after_msms = int(df.shape[0])
 
         df["annotation_level"] = df.apply(assign_level, axis=1)
 
@@ -702,6 +709,22 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             # Filter to passing features only
             feat_df = feat_df[feat_df["pass_all_groups"]]
 
+        # Count after pass_all gating
+        after_pass_all = int(feat_df.shape[0])
+
+        # Update stats
+        per_file_stats.append({
+            "file": p.name,  # type: ignore
+            "raw": raw_count,
+            "after_msms": after_msms,
+            "after_snr": int(df.shape[0]),
+            "after_pass_all": after_pass_all,
+        })
+        totals["raw"] += raw_count
+        totals["after_msms"] += after_msms
+        totals["after_snr"] += int(df.shape[0])
+        totals["after_pass_all"] += after_pass_all
+
         frames.append(feat_df)
 
     if frames:
@@ -755,6 +778,7 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         out_cols = id_order + other_cols + sample_cols + metric_cols + pass_cols
         frames = [fr.reindex(columns=out_cols) for fr in frames]
         merged = pd.concat(frames, ignore_index=True)
+        rows_pre_dedup = int(merged.shape[0])
 
         # After merging all files: append isomer label to metabolite_name and deduplicate by name
         if "isomer_label" in merged.columns and "metabolite_name" in merged.columns:
@@ -791,9 +815,19 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             merged = merged.groupby("metabolite_name", dropna=False, group_keys=False).apply(_pick_best)
             merged = merged.drop(columns=["_cv_sort"], errors="ignore")
         merged = merged.drop(columns=["_avg_intensity"], errors="ignore")
+        rows_post_dedup = int(merged.shape[0])
     else:
         merged = pd.DataFrame(columns=["chrom", "annotation_level", "alignment_id", "rt_min", "mz", "metabolite_name", "adduct"])  # type: ignore
+        rows_pre_dedup = 0
+        rows_post_dedup = 0
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(output_csv, index=False)
-    return {"files": len(files), "rows": int(len(merged))}
+    return {
+        "files": len(files),
+        "rows": int(len(merged)),
+        "rows_pre_dedup": rows_pre_dedup,
+        "dedup_dropped": rows_pre_dedup - rows_post_dedup,
+        "totals": totals,
+        "per_file": per_file_stats,
+    }

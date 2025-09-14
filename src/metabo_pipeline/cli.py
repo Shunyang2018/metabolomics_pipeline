@@ -129,8 +129,20 @@ def merge(
         raise typer.Exit(code=1)
 
     log.ok(f"Merged {summary['files']} files → {out}")
-    # For wide: 'rows' are features; for long: 'rows' are long rows
-    log.info(f"Rows written: {summary['rows']}")
+    # Print stats if available (wide mode)
+    totals = summary.get("totals") if isinstance(summary, dict) else None
+    if totals:
+        log.info(
+            f"Totals — raw: {totals.get('raw')}, after MS/MS: {totals.get('after_msms')}, "
+            f"after S/N: {totals.get('after_snr')}, after pass_all: {totals.get('after_pass_all')}"
+        )
+        pre = summary.get("rows_pre_dedup")
+        post = summary.get("rows")
+        drop = summary.get("dedup_dropped")
+        log.info(f"Dedup — pre: {pre}, post: {post}, dropped: {drop}")
+    else:
+        # For long: 'rows' are long rows
+        log.info(f"Rows written: {summary['rows']}")
 
 
 if __name__ == "__main__":
