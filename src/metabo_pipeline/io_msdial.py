@@ -584,13 +584,13 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         feat_df = feat_df.rename(columns={**id_rename, **meta_rename})
         feat_df.insert(0, "chrom", _infer_chrom_from_name(p.name))
 
-        # --- Per-group QC filters ---
+        # --- Per-group QC metrics ---
         # Identify blank column if present
         blank_col = "blank" if "blank" in feat_df.columns else None
         if blank_col is not None:
-            blank_series = pd.to_numeric(feat_df[blank_col], errors="coerce").fillna(0.0)
+            blank_series = pd.to_numeric(feat_df[blank_col], errors="coerce")
         else:
-            blank_series = pd.Series(0.0, index=feat_df.index)
+            blank_series = None
 
         # Build mapping of group -> replicate columns for this file
         group_cols: Dict[str, List[str]] = {}
@@ -607,33 +607,37 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
                 continue
             group_cols.setdefault(grp, []).append(c)
 
-        # Compute filters per group and append as trailing columns
+        # Compute metrics per group and append as trailing columns
         for grp, cols_grp in group_cols.items():
             vals = feat_df[cols_grp].apply(pd.to_numeric, errors="coerce")
             nrep = max(1, len(cols_grp))
             # Presence: intensity > 0 treated as detected
             present = vals.gt(0)
             present_frac = present.sum(axis=1) / float(nrep)
-            exist60 = present_frac.ge(0.6)
+            present_percent = (present_frac * 100.0).astype(float)
 
             # Blank 7x using max across replicates vs blank
             max_val = vals.max(axis=1, skipna=True)
-            blank7x = max_val.gt(blank_series * 7.0)
-            # If no blank column exists, do not penalize
-            if blank_col is None:
-                blank7x = pd.Series(True, index=feat_df.index)
+            if blank_col is not None:
+                denom = blank_series.replace(0, pd.NA)
+                blank_fold = (max_val / denom).astype(float)
+            else:
+                # No blank available → leave as NaN
+                blank_fold = pd.Series([float('nan')]*len(feat_df), index=feat_df.index)
 
             # CV <= 40% among present replicates (need at least 2 present)
             vals_present = vals.where(present)
             mean = vals_present.mean(axis=1, skipna=True)
             std = vals_present.std(axis=1, ddof=1, skipna=True)
-            cv = std / mean.replace(0, pd.NA)
-            cv40 = (cv.astype(float) <= 0.4) & (present.sum(axis=1) >= 2) & mean.gt(0)
+            denom_mean = mean.replace(0, pd.NA)
+            cv_percent = (std / denom_mean) * 100.0
+            # If fewer than 2 replicates present, set NaN
+            cv_percent = cv_percent.where(present.sum(axis=1) >= 2)
 
             # Append columns
-            feat_df[f"filter_blank7x_{grp}"] = blank7x.fillna(False)
-            feat_df[f"filter_exist60_{grp}"] = exist60.fillna(False)
-            feat_df[f"filter_cv40_{grp}"] = cv40.fillna(False)
+            feat_df[f"blank_fold_{grp}"] = blank_fold
+            feat_df[f"present_percent_{grp}"] = present_percent
+            feat_df[f"cv_percent_{grp}"] = cv_percent
         frames.append(feat_df)
 
     if frames:
@@ -670,17 +674,19 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         ]
         all_cols = set().union(*[set(fr.columns) for fr in frames])
         id_order = [c for c in id_preferred if c in all_cols]
-        # Identify filter columns (place at end)
-        filter_cols = sorted(c for c in all_cols if c.startswith("filter_"))
+        # Identify metric columns (place at end)
+        metric_cols = sorted(
+            c for c in all_cols if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_"))
+        )
         # Identify sample columns by pattern and exclude filters/ids
         sample_pat = re.compile(r"^m2_[a-z0-9]+_.+")
         sample_cols = sorted(
             c for c in all_cols
-            if (c not in set(id_order)) and (c not in set(filter_cols)) and sample_pat.match(str(c))
+            if (c not in set(id_order)) and (c not in set(metric_cols)) and sample_pat.match(str(c))
         )
         # Everything else (rare leftovers) goes between id and samples
-        other_cols = sorted(c for c in all_cols if c not in set(id_order + sample_cols + filter_cols))
-        out_cols = id_order + other_cols + sample_cols + filter_cols
+        other_cols = sorted(c for c in all_cols if c not in set(id_order + sample_cols + metric_cols))
+        out_cols = id_order + other_cols + sample_cols + metric_cols
         frames = [fr.reindex(columns=out_cols) for fr in frames]
         merged = pd.concat(frames, ignore_index=True)
     else:
