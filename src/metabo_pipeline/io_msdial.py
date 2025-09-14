@@ -524,28 +524,26 @@ def merge_folder_to_wide_csv(
         return cnt
 
     def assign_level(row: "pd.Series") -> str:
+        # Level 3 if no annotation name
         name = str(row.get("Metabolite name", "")).strip()
-        annotated = bool(name and name.lower() != "unknown")
-        if not annotated:
-            ms2 = str(row.get("MS/MS assigned", "")).strip().upper()
-            annotated = (ms2 == "TRUE")
-        if annotated:
-            try:
-                wdot = float(row.get("Weighted dot product", float("nan")))
-            except Exception:
-                wdot = float("nan")
-            try:
-                rdot = float(row.get("Reverse dot product", float("nan")))
-            except Exception:
-                rdot = float("nan")
-            try:
-                mcount = int(round(float(row.get("Matched peaks count", float("nan")))))
-            except Exception:
-                mcount = -1
-            if (pd.notna(wdot) and pd.notna(rdot) and mcount >= 3 and (wdot > 750) and (abs(wdot - rdot) < 200)):
-                return "1"
-            return "2"
-        return "3"
+        if (not name) or name.lower().startswith("unknown"):
+            return "3"
+        # Otherwise annotated: decide L1 vs L2 using scores if present
+        try:
+            wdot = float(row.get("Weighted dot product", float("nan")))
+        except Exception:
+            wdot = float("nan")
+        try:
+            rdot = float(row.get("Reverse dot product", float("nan")))
+        except Exception:
+            rdot = float("nan")
+        try:
+            mcount = int(round(float(row.get("Matched peaks count", float("nan")))))
+        except Exception:
+            mcount = -1
+        if (pd.notna(wdot) and pd.notna(rdot) and mcount >= 3 and (wdot > 750) and (abs(wdot - rdot) < 200)):
+            return "1"
+        return "2"
 
     # Mapping of additional MS-DIAL columns to normalized names
     meta_rename = {
@@ -597,7 +595,7 @@ def merge_folder_to_wide_csv(
         rename_samples = {c: _normalize_sample_id_core(c) for c in sample_cols}
         df = df.rename(columns=rename_samples)
 
-        # Build feature frame
+        # Build feature frame: keep all metadata columns before intensities, then add normalized duplicates
         id_rename = {
             "Alignment ID": "alignment_id",
             "Average Rt(min)": "rt_min",
@@ -605,11 +603,15 @@ def merge_folder_to_wide_csv(
             "Metabolite name": "metabolite_name",
             "Adduct type": "adduct",
         }
-        present_ids = [c for c in id_rename.keys() if c in df.columns]
-        present_meta = [c for c in meta_rename.keys() if c in df.columns]
-        base_cols = present_ids + ["annotation_level"] + present_meta
-        feat_df = df[base_cols + list(rename_samples.values())].copy()
-        feat_df = feat_df.rename(columns={**id_rename, **meta_rename})
+        # Keep original metadata (all columns before sample_start)
+        meta_cols = cols[:sample_start]
+        feat_df = df[meta_cols].copy()
+        # Add annotation level
+        feat_df["annotation_level"] = df["annotation_level"]
+        # Add normalized duplicate columns for convenient downstream use
+        for src, dst in {**id_rename, **meta_rename}.items():
+            if src in feat_df.columns and dst not in feat_df.columns:
+                feat_df[dst] = feat_df[src]
 
         # Isomer labeling by RT clustering within metabolite_name + adduct
         RT_CLUSTER_WINDOW = ISOMER_RT_WINDOW_MIN  # minutes
