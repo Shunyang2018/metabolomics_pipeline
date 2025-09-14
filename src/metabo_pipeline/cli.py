@@ -121,7 +121,12 @@ def merge(
     out = Path(output_csv)
     try:
         if format.lower() == "wide":
-            summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive)
+            def _progress(rec: dict):
+                log.info(
+                    f"[file] {rec.get('file')}: raw={rec.get('raw')}, MS/MS={rec.get('after_msms')}, "
+                    f"S/N={rec.get('after_snr')}, pass_all={rec.get('after_pass_all')}"
+                )
+            summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive, progress=_progress)
         else:
             summary = merge_folder_to_long_csv(in_dir, out, recursive=recursive, engine=engine.lower())
     except Exception as e:

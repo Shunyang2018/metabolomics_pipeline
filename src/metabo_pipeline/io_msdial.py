@@ -4,7 +4,7 @@ import csv
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, Iterable, List, Tuple
+from typing import Dict, Iterable, List, Tuple, Optional, Callable
 
 # Optional pandas import for faster merging
 try:
@@ -488,7 +488,12 @@ def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dic
     return {"files": len(files), "rows": int(rows_total)}
 
 
-def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool = False) -> Dict[str, int]:
+def merge_folder_to_wide_csv(
+    input_dir: Path,
+    output_csv: Path,
+    recursive: bool = False,
+    progress: Optional[Callable[[Dict[str, int]], None]] = None,
+) -> Dict[str, int]:
     """Merge MS-DIAL tables into a wide table: one feature per row, normalized sample columns."""
     if not HAS_PANDAS:
         raise RuntimeError("Pandas is required for wide-format merging. Install pandas and retry.")
@@ -713,17 +718,26 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         after_pass_all = int(feat_df.shape[0])
 
         # Update stats
-        per_file_stats.append({
+        rec = {
             "file": p.name,  # type: ignore
             "raw": raw_count,
             "after_msms": after_msms,
             "after_snr": int(df.shape[0]),
             "after_pass_all": after_pass_all,
-        })
+        }
+        per_file_stats.append(rec)
         totals["raw"] += raw_count
         totals["after_msms"] += after_msms
         totals["after_snr"] += int(df.shape[0])
         totals["after_pass_all"] += after_pass_all
+
+        # Emit progress to caller if requested
+        if progress is not None:
+            try:
+                progress(rec)
+            except Exception:
+                # Do not break the pipeline on progress errors
+                pass
 
         frames.append(feat_df)
 
