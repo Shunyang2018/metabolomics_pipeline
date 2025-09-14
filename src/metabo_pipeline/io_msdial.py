@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import csv
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Dict, Iterable, List, Tuple
@@ -229,6 +230,16 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
         else:
             return "3"
 
+    # Prepare sample ID normalizer: remove assay/polarity tokens and tidy
+    token_pat = re.compile(r"(?i)(^|[\W_])(lipidomics|lipids|lipid|hilic|c18|pos|neg|ms1)(?=($|[\W_]))")
+
+    def _normalize_sample_id(s: str) -> str:
+        v = str(s or "").strip().lower()
+        v = re.sub(r"[\s\-]+", "_", v)
+        v = token_pat.sub(lambda m: "_" if m.group(1) else "", v)
+        v = re.sub(r"_+", "_", v).strip("_")
+        return v
+
     # Stream remaining lines
     with path.open("r", encoding="utf-8-sig", newline="") as f:
         r = csv.reader(f)
@@ -250,16 +261,16 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
             ann_level = _assign_annotation_level(row, name)
 
             for sample, val in zip(sample_names, row[sample_start:]):
+                norm_sample = _normalize_sample_id(sample)
                 yield {
                     "chrom": chrom,
-                    "source_file": path.name,
                     "annotation_level": ann_level,
                     "alignment_id": alignment_id,
                     "rt_min": rt_min,
                     "mz": mz,
                     "metabolite_name": name,
                     "adduct": adduct,
-                    "sample_id": sample,
+                    "sample_id": norm_sample,
                     "intensity": val,
                 }
 
@@ -294,7 +305,6 @@ def merge_folder_to_long_csv(input_dir: Path, output_csv: Path, recursive: bool 
             f_out,
             fieldnames=[
                 "chrom",
-                "source_file",
                 "annotation_level",
                 "alignment_id",
                 "rt_min",
@@ -397,9 +407,18 @@ def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dic
         present_id_cols = [c for c in id_cols if c in df.columns]
         long_df = df.melt(id_vars=present_id_cols, value_vars=sample_cols, var_name="sample_id", value_name="intensity")
 
-        # Add chrom/source_file columns at front
+        # Normalize sample names to common core across assays
+        token_pat = re.compile(r"(?i)(^|[\W_])(lipidomics|lipids|lipid|hilic|c18|pos|neg|ms1)(?=($|[\W_]))")
+        def _norm_sample(s: str) -> str:
+            v = str(s or "").strip().lower()
+            v = re.sub(r"[\s\-]+", "_", v)
+            v = token_pat.sub(lambda m: "_" if m.group(1) else "", v)
+            v = re.sub(r"_+", "_", v).strip("_")
+            return v
+        long_df["sample_id"] = long_df["sample_id"].map(_norm_sample)
+
+        # Add chrom column at front
         chrom = _infer_chrom_from_name(p.name)
-        long_df.insert(0, "source_file", p.name)
         long_df.insert(0, "chrom", chrom)
 
         # Rename columns to normalized names
@@ -415,7 +434,6 @@ def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dic
         # Keep exact output column order
         out_cols = [
             "chrom",
-            "source_file",
             "annotation_level",
             "alignment_id",
             "rt_min",
@@ -438,7 +456,7 @@ def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dic
         merged = pd.concat(frames, ignore_index=True)
     else:
         merged = pd.DataFrame(columns=[
-            "chrom","source_file","annotation_level","alignment_id","rt_min","mz","metabolite_name","adduct","sample_id","intensity"
+            "chrom","annotation_level","alignment_id","rt_min","mz","metabolite_name","adduct","sample_id","intensity"
         ])
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)

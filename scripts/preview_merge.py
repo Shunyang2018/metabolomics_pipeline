@@ -21,13 +21,13 @@ def main(input_dir: str, output_csv: str):
         r = csv.DictReader(f)
         for i, row in enumerate(r):
             print({k: row[k] for k in (
-                "chrom","source_file","annotation_level","alignment_id","metabolite_name","sample_id","intensity"
+                "chrom","annotation_level","alignment_id","metabolite_name","sample_id","intensity"
             )})
             if i >= 4:
                 break
 
     # Print a couple rows for specific sample_ids if present
-    targets = {"M2_Lipids_TV_5+6_pos", "M2_C18_TV_5+6_POS"}
+    targets = {"m2_tv_5+6"}
     print("\nRows for selected sample_id(s):")
     count = 0
     with out_path.open("r", encoding="utf-8") as f:
@@ -47,4 +47,3 @@ if __name__ == "__main__":
     out_csv = sys.argv[2] if len(sys.argv) > 2 else "outputs/merged_preview.csv"
     Path(out_csv).parent.mkdir(parents=True, exist_ok=True)
     main(in_dir, out_csv)
-

@@ -33,13 +33,19 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, perf
 ## Commands
 - `metabo init` — scaffold a config template and folders.
 - `metabo validate` — parse MS-DIAL alignment table(s), summarize samples/features, and check embedded metadata rows.
-- `metabo merge` — combine multiple alignment tables into one long-format CSV, annotating source (chromatography and filename). New columns appear first: `chrom`, `source_file`.
+- `metabo merge` — combine multiple alignment tables into one long-format CSV, with normalized sample IDs across assays. New leading column: `chrom`. Sample IDs are consolidated (e.g., `M2_Lipids_TV_5+6_pos` and `M2_C18_TV_5+6_POS` → `m2_tv_5+6`).
 - `metabo run` — placeholder for the full pipeline (coming milestones M3–M7).
 - `metabo diag` — print environment info and versions.
 
 ## Inputs
 - MS-DIAL alignment tables (`*.csv`/`*.txt`) with the four metadata rows: Class, File type, Injection order, Batch ID.
 - Optional: `samples.csv` for richer metadata.
+
+### Sample ID normalization
+- During merge, sample column headers are consolidated to a common core by removing assay and polarity tokens and lowercasing. Examples:
+  - `M2_Lipids_TV_5+6_pos` → `m2_tv_5+6`
+  - `M2_C18_TV_5+6_POS` → `m2_tv_5+6`
+  - `M2_Hilic_PE_3+4_neg` → `m2_pe_3+4`
 
 ## Dev Notes
 - Data files are ignored by `.gitignore` (see rules for `M2_*.csv`, `M2 data/`, and archives).
