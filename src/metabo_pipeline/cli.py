@@ -10,7 +10,7 @@ import typer
 
 from .io_msdial import summarize_alignment_table
 from .logging import get_logger
-from .io_msdial import merge_folder_to_long_csv, merge_folder_to_wide_csv
+from .io_msdial import merge_folder_to_wide_csv
 
 app = typer.Typer(add_completion=False, help="Metabolomics pipeline for MS-DIAL outputs.")
 log = get_logger()
@@ -110,25 +110,20 @@ def merge(
     input_dir: str = typer.Argument(..., help="Folder containing MS-DIAL CSV/TXT files"),
     output_csv: str = typer.Option("outputs/merged.csv", help="Path to write merged CSV"),
     recursive: bool = typer.Option(False, help="Recurse into subfolders"),
-    format: str = typer.Option("wide", help="Output format: wide or long", case_sensitive=False),
-    engine: str = typer.Option("pandas", help="Engine for parsing (long mode only): pandas or csv", case_sensitive=False),
 ):
-    """Merge HILIC/C18/Lipidomics files. Default is wide format (one feature per row)."""
+    """Merge HILIC/C18/Lipidomics files (wide format, one feature per row)."""
     in_dir = Path(input_dir)
     if not in_dir.exists() or not in_dir.is_dir():
         log.error(f"Input directory not found: {in_dir}")
         raise typer.Exit(code=2)
     out = Path(output_csv)
     try:
-        if format.lower() == "wide":
-            def _progress(rec: dict):
-                log.info(
-                    f"[file] {rec.get('file')}: raw={rec.get('raw')}, MS/MS={rec.get('after_msms')}, "
-                    f"S/N={rec.get('after_snr')}, pass_all={rec.get('after_pass_all')}"
-                )
-            summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive, progress=_progress)
-        else:
-            summary = merge_folder_to_long_csv(in_dir, out, recursive=recursive, engine=engine.lower())
+        def _progress(rec: dict):
+            log.info(
+                f"[file] {rec.get('file')}: raw={rec.get('raw')}, MS/MS={rec.get('after_msms')}, "
+                f"S/N={rec.get('after_snr')}, pass_all={rec.get('after_pass_all')}"
+            )
+        summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive, progress=_progress)
     except Exception as e:
         log.error(f"Failed to merge files from {in_dir}: {e}")
         raise typer.Exit(code=1)
@@ -154,9 +149,8 @@ def merge(
                     f" - {rec.get('file')}: raw={rec.get('raw')}, "
                     f"MS/MS={rec.get('after_msms')}, S/N={rec.get('after_snr')}, pass_all={rec.get('after_pass_all')}"
                 )
-    else:
-        # For long: 'rows' are long rows
-        log.info(f"Rows written: {summary['rows']}")
+    # For wide: 'rows' are features
+    log.info(f"Rows written: {summary['rows']}")
 
 
 if __name__ == "__main__":
