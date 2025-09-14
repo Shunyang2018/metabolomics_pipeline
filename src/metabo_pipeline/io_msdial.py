@@ -501,7 +501,8 @@ def merge_folder_to_wide_csv(
     files = list_alignment_files(input_dir, recursive=recursive)
     frames: List["pd.DataFrame"] = []
     # Stats
-    totals = {"raw": 0, "after_msms": 0, "after_snr": 0, "after_pass": 0}
+    totals = {"raw": 0, "after_msms": 0, "after_snr": 0, "after_pass": 0,
+              "ann1": 0, "ann2": 0, "ann3": 0}
     per_file_stats: List[Dict[str, int]] = []
 
     def count_msms_ions(msms: str) -> int:
@@ -720,6 +721,12 @@ def merge_folder_to_wide_csv(
         # Count after pass_any gating
         after_pass = int(feat_df.shape[0])
 
+        # Annotation level counts after pass gating (per-file)
+        ann_counts = feat_df.get("annotation_level")
+        a1 = int((ann_counts == "1").sum()) if ann_counts is not None else 0
+        a2 = int((ann_counts == "2").sum()) if ann_counts is not None else 0
+        a3 = int((ann_counts == "3").sum()) if ann_counts is not None else 0
+
         # Update stats
         rec = {
             "file": p.name,  # type: ignore
@@ -727,12 +734,16 @@ def merge_folder_to_wide_csv(
             "after_msms": after_msms,
             "after_snr": int(df.shape[0]),
             "after_pass": after_pass,
+            "ann1": a1, "ann2": a2, "ann3": a3,
         }
         per_file_stats.append(rec)
         totals["raw"] += raw_count
         totals["after_msms"] += after_msms
         totals["after_snr"] += int(df.shape[0])
         totals["after_pass"] += after_pass
+        totals["ann1"] += a1
+        totals["ann2"] += a2
+        totals["ann3"] += a3
 
         # Emit progress to caller if requested
         if progress is not None:
@@ -833,10 +844,19 @@ def merge_folder_to_wide_csv(
             merged = merged.drop(columns=["_cv_sort"], errors="ignore")
         merged = merged.drop(columns=["_avg_intensity"], errors="ignore")
         rows_post_dedup = int(merged.shape[0])
+
+        # Annotation level counts after dedup (totals)
+        ann_post = merged.get("annotation_level")
+        ann_post_dict = {
+            "1": int((ann_post == "1").sum()) if ann_post is not None else 0,
+            "2": int((ann_post == "2").sum()) if ann_post is not None else 0,
+            "3": int((ann_post == "3").sum()) if ann_post is not None else 0,
+        }
     else:
         merged = pd.DataFrame(columns=["chrom", "annotation_level", "alignment_id", "rt_min", "mz", "metabolite_name", "adduct"])  # type: ignore
         rows_pre_dedup = 0
         rows_post_dedup = 0
+        ann_post_dict = {"1": 0, "2": 0, "3": 0}
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(output_csv, index=False)
@@ -847,4 +867,5 @@ def merge_folder_to_wide_csv(
         "dedup_dropped": rows_pre_dedup - rows_post_dedup,
         "totals": totals,
         "per_file": per_file_stats,
+        "ann_post": ann_post_dict,
     }
