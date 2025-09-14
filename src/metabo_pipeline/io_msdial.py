@@ -583,7 +583,34 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         base_cols = present_ids + ["annotation_level"] + present_meta
         feat_df = df[base_cols + list(rename_samples.values())].copy()
         feat_df = feat_df.rename(columns={**id_rename, **meta_rename})
+
+        # Isomer labeling by RT clustering within metabolite_name + adduct
+        RT_CLUSTER_WINDOW = 0.2  # minutes
+        if all(c in feat_df.columns for c in ("metabolite_name", "adduct", "rt_min")):
+            feat_df["_rt_num"] = pd.to_numeric(feat_df["rt_min"], errors="coerce")
+            def _label_group(g):
+                g = g.sort_values("_rt_num")
+                rts = g["_rt_num"].to_numpy()
+                labels = []
+                cluster = 1
+                prev = None
+                for rt in rts:
+                    if prev is None or pd.isna(prev) or pd.isna(rt) or abs(rt - prev) > RT_CLUSTER_WINDOW:
+                        cluster = cluster if prev is None else cluster + 1
+                    labels.append(f"isomer_{cluster}")
+                    prev = rt
+                out = g.copy()
+                out["_isomer_label_tmp"] = labels
+                return out
+            feat_df = feat_df.groupby(["metabolite_name", "adduct"], dropna=False, group_keys=False).apply(_label_group)
+            feat_df["isomer_label"] = feat_df.pop("_isomer_label_tmp")
+            feat_df = feat_df.drop(columns=["_rt_num"], errors="ignore")
+        else:
+            feat_df["isomer_label"] = ""
+
+        # Insert leading columns in desired order: isomer_label, chrom
         feat_df.insert(0, "chrom", _infer_chrom_from_name(p.name))
+        feat_df.insert(0, "isomer_label", feat_df.pop("isomer_label"))
 
         # --- Per-group QC metrics ---
         # Identify blank column if present
@@ -668,6 +695,7 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
     if frames:
         # unify columns
         id_preferred = [
+            "isomer_label",
             "chrom",
             "annotation_level",
             "alignment_id",

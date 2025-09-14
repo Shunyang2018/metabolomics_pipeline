@@ -28,6 +28,7 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, perf
   - `metabo validate --input M2_HILIC_NEG_nistannotated.csv`
 - Merge all files (default: WIDE, one feature per row, normalized sample columns):
   - `metabo merge "." --output outputs\\merged.csv`  (pandas required)
+  - Leading columns include `isomer_label` (assigned by RT clustering within metabolite + adduct), then `chrom`, and core IDs.
 - Long format (one intensity per row) if needed:
   - `metabo merge "." --output outputs\\merged_long.csv --format long --engine pandas`
 
