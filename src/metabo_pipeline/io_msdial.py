@@ -124,6 +124,15 @@ def _infer_chrom_from_name(name: str) -> str:
     return "unknown"
 
 
+def _normalize_sample_id_core(name: str) -> str:
+    v = str(name or "").strip().lower()
+    v = re.sub(r"[\s\-]+", "_", v)
+    token_pat = re.compile(r"(?i)(^|[\W_])(lipidomics|lipids|lipid|hilic|c18|pos|neg|ms1)(?=($|[\W_]))")
+    v = token_pat.sub(lambda m: "_" if m.group(1) else "", v)
+    v = re.sub(r"_+", "_", v).strip("_")
+    return v
+
+
 def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
     """Yield long-format rows from an MS-DIAL alignment table.
 
@@ -462,3 +471,105 @@ def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dic
     output_csv.parent.mkdir(parents=True, exist_ok=True)
     merged.to_csv(output_csv, index=False)
     return {"files": len(files), "rows": int(rows_total)}
+
+
+def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool = False) -> Dict[str, int]:
+    """Merge MS-DIAL tables into a wide table: one feature per row, normalized sample columns."""
+    if not HAS_PANDAS:
+        raise RuntimeError("Pandas is required for wide-format merging. Install pandas and retry.")
+
+    files = list_alignment_files(input_dir, recursive=recursive)
+    frames: List["pd.DataFrame"] = []
+
+    def count_msms_ions(msms: str) -> int:
+        if not isinstance(msms, str):
+            return 0
+        s = msms.strip().lower()
+        if s in {"", "null", "na", "none"}:
+            return 0
+        cnt = 0
+        for tok in s.split():
+            if ":" not in tok:
+                continue
+            try:
+                inten = float(tok.split(":", 1)[1])
+            except Exception:
+                continue
+            if inten > 0:
+                cnt += 1
+        return cnt
+
+    def assign_level(row: "pd.Series") -> str:
+        name = str(row.get("Metabolite name", "")).strip()
+        annotated = bool(name and name.lower() != "unknown")
+        if not annotated:
+            ms2 = str(row.get("MS/MS assigned", "")).strip().upper()
+            annotated = (ms2 == "TRUE")
+        if annotated:
+            try:
+                wdot = float(row.get("Weighted dot product", float("nan")))
+            except Exception:
+                wdot = float("nan")
+            try:
+                rdot = float(row.get("Reverse dot product", float("nan")))
+            except Exception:
+                rdot = float("nan")
+            try:
+                mcount = int(round(float(row.get("Matched peaks count", float("nan")))))
+            except Exception:
+                mcount = -1
+            if (pd.notna(wdot) and pd.notna(rdot) and mcount >= 3 and (wdot > 750) and (abs(wdot - rdot) < 200)):
+                return "1"
+            return "2"
+        return "3"
+
+    for p in files:
+        try:
+            df = pd.read_csv(p, header=4, encoding="utf-8-sig")
+        except Exception:
+            df = pd.read_csv(p, header=4, encoding="utf-8-sig", engine="python")
+
+        cols = list(df.columns)
+        if "MS/MS spectrum" in cols:
+            sample_start = cols.index("MS/MS spectrum") + 1
+        else:
+            sample_start = max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
+        sample_cols = cols[sample_start:]
+
+        df["_msms_ion_count"] = df.get("MS/MS spectrum", "").map(count_msms_ions)
+        df = df[df["_msms_ion_count"] >= 3].copy()
+
+        df["annotation_level"] = df.apply(assign_level, axis=1)
+
+        # Normalize sample col names
+        rename_samples = {c: _normalize_sample_id_core(c) for c in sample_cols}
+        df = df.rename(columns=rename_samples)
+
+        # Build feature frame
+        id_rename = {
+            "Alignment ID": "alignment_id",
+            "Average Rt(min)": "rt_min",
+            "Average Mz": "mz",
+            "Metabolite name": "metabolite_name",
+            "Adduct type": "adduct",
+        }
+        id_cols = [c for c in [*id_rename.keys(), "annotation_level"] if c in df.columns]
+        feat_df = df[id_cols + list(rename_samples.values())].copy()
+        feat_df = feat_df.rename(columns=id_rename)
+        feat_df.insert(0, "chrom", _infer_chrom_from_name(p.name))
+        frames.append(feat_df)
+
+    if frames:
+        # unify columns
+        id_order = ["chrom", "annotation_level", "alignment_id", "rt_min", "mz", "metabolite_name", "adduct"]
+        all_cols = set().union(*[set(fr.columns) for fr in frames])
+        sample_cols = sorted(c for c in all_cols if c not in set(id_order))
+        out_cols = id_order + sample_cols
+        frames = [fr.reindex(columns=out_cols) for fr in frames]
+        merged = pd.concat(frames, ignore_index=True)
+    else:
+        merged = pd.DataFrame(columns=["chrom", "annotation_level", "alignment_id", "rt_min", "mz", "metabolite_name", "adduct"])  # type: ignore
+
+    output_csv.parent.mkdir(parents=True, exist_ok=True)
+    merged.to_csv(output_csv, index=False)
+    return {"files": len(files), "rows": int(len(merged))}

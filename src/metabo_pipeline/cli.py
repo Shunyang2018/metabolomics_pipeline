@@ -10,7 +10,7 @@ import typer
 
 from .io_msdial import summarize_alignment_table
 from .logging import get_logger
-from .io_msdial import merge_folder_to_long_csv
+from .io_msdial import merge_folder_to_long_csv, merge_folder_to_wide_csv
 
 app = typer.Typer(add_completion=False, help="Metabolomics pipeline for MS-DIAL outputs.")
 log = get_logger()
@@ -108,24 +108,29 @@ def diag():
 @app.command()
 def merge(
     input_dir: str = typer.Argument(..., help="Folder containing MS-DIAL CSV/TXT files"),
-    output_csv: str = typer.Option("outputs/merged_long.csv", help="Path to write merged long-format CSV"),
+    output_csv: str = typer.Option("outputs/merged.csv", help="Path to write merged CSV"),
     recursive: bool = typer.Option(False, help="Recurse into subfolders"),
-    engine: str = typer.Option("pandas", help="Engine to use: pandas or csv", case_sensitive=False),
+    format: str = typer.Option("wide", help="Output format: wide or long", case_sensitive=False),
+    engine: str = typer.Option("pandas", help="Engine for parsing (long mode only): pandas or csv", case_sensitive=False),
 ):
-    """Merge HILIC/C18/Lipidomics files into one long-format CSV with chromatography and source file columns first."""
+    """Merge HILIC/C18/Lipidomics files. Default is wide format (one feature per row)."""
     in_dir = Path(input_dir)
     if not in_dir.exists() or not in_dir.is_dir():
         log.error(f"Input directory not found: {in_dir}")
         raise typer.Exit(code=2)
     out = Path(output_csv)
     try:
-        summary = merge_folder_to_long_csv(in_dir, out, recursive=recursive, engine=engine.lower())
+        if format.lower() == "wide":
+            summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive)
+        else:
+            summary = merge_folder_to_long_csv(in_dir, out, recursive=recursive, engine=engine.lower())
     except Exception as e:
         log.error(f"Failed to merge files from {in_dir}: {e}")
         raise typer.Exit(code=1)
 
     log.ok(f"Merged {summary['files']} files → {out}")
-    log.info(f"Total rows written: {summary['rows']}")
+    # For wide: 'rows' are features; for long: 'rows' are long rows
+    log.info(f"Rows written: {summary['rows']}")
 
 
 if __name__ == "__main__":

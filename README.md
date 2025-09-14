@@ -26,14 +26,17 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, perf
 - `metabo --help`
 - Validate an MS-DIAL table:
   - `metabo validate --input M2_HILIC_NEG_nistannotated.csv`
-- Merge all files in a folder (HILIC/C18/Lipidomics) to long format with pandas:
-  - `metabo merge "F:\\Shunyang pipeline" --output outputs\\merged_long.csv --engine pandas`
-  - Fallback (no pandas): `metabo merge . --output outputs\\merged_long.csv --engine csv`
+- Merge all files (default: WIDE, one feature per row, normalized sample columns):
+  - `metabo merge "." --output outputs\\merged.csv`  (pandas required)
+- Long format (one intensity per row) if needed:
+  - `metabo merge "." --output outputs\\merged_long.csv --format long --engine pandas`
 
 ## Commands
 - `metabo init` — scaffold a config template and folders.
 - `metabo validate` — parse MS-DIAL alignment table(s), summarize samples/features, and check embedded metadata rows.
-- `metabo merge` — combine multiple alignment tables into one long-format CSV, with normalized sample IDs across assays. New leading column: `chrom`. Sample IDs are consolidated (e.g., `M2_Lipids_TV_5+6_pos` and `M2_C18_TV_5+6_POS` → `m2_tv_5+6`).
+- `metabo merge` — combine multiple alignment tables:
+  - Default: wide format (one feature per row; normalized sample columns across assays).
+  - Long format: `--format long` (columns: chrom, annotation_level, alignment_id, rt_min, mz, metabolite_name, adduct, sample_id, intensity).
 - `metabo run` — placeholder for the full pipeline (coming milestones M3–M7).
 - `metabo diag` — print environment info and versions.
 
