@@ -523,6 +523,30 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             return "2"
         return "3"
 
+    # Mapping of additional MS-DIAL columns to normalized names
+    meta_rename = {
+        "Formula": "formula",
+        "Ontology": "ontology",
+        "INCHIKEY": "inchi_key",
+        "SMILES": "smiles",
+        "Annotation tag (VS1.0)": "annotation_tag",
+        "Comment": "comment",
+        "MS/MS assigned": "msms_assigned",
+        "RT matched": "rt_matched",
+        "m/z matched": "mz_matched",
+        "MS/MS matched": "msms_matched",
+        "Weighted dot product": "weighted_dot",
+        "Reverse dot product": "reverse_dot",
+        "Simple dot product": "simple_dot",
+        "Matched peaks count": "matched_peaks_count",
+        "Matched peaks percentage": "matched_peaks_pct",
+        "Total score": "total_score",
+        "S/N average": "snr_avg",
+        "Reference RT": "reference_rt",
+        "Reference m/z": "reference_mz",
+        "Spectrum reference file name": "spectrum_ref",
+    }
+
     for p in files:
         try:
             df = pd.read_csv(p, header=4, encoding="utf-8-sig")
@@ -553,16 +577,48 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             "Metabolite name": "metabolite_name",
             "Adduct type": "adduct",
         }
-        id_cols = [c for c in [*id_rename.keys(), "annotation_level"] if c in df.columns]
-        feat_df = df[id_cols + list(rename_samples.values())].copy()
-        feat_df = feat_df.rename(columns=id_rename)
+        present_ids = [c for c in id_rename.keys() if c in df.columns]
+        present_meta = [c for c in meta_rename.keys() if c in df.columns]
+        base_cols = present_ids + ["annotation_level"] + present_meta
+        feat_df = df[base_cols + list(rename_samples.values())].copy()
+        feat_df = feat_df.rename(columns={**id_rename, **meta_rename})
         feat_df.insert(0, "chrom", _infer_chrom_from_name(p.name))
         frames.append(feat_df)
 
     if frames:
         # unify columns
-        id_order = ["chrom", "annotation_level", "alignment_id", "rt_min", "mz", "metabolite_name", "adduct"]
+        id_preferred = [
+            "chrom",
+            "annotation_level",
+            "alignment_id",
+            "rt_min",
+            "mz",
+            "metabolite_name",
+            "adduct",
+            # additional metadata (only those present will be kept in order)
+            "formula",
+            "ontology",
+            "inchi_key",
+            "smiles",
+            "annotation_tag",
+            "msms_assigned",
+            "rt_matched",
+            "mz_matched",
+            "msms_matched",
+            "weighted_dot",
+            "reverse_dot",
+            "simple_dot",
+            "matched_peaks_count",
+            "matched_peaks_pct",
+            "total_score",
+            "snr_avg",
+            "reference_rt",
+            "reference_mz",
+            "spectrum_ref",
+            "comment",
+        ]
         all_cols = set().union(*[set(fr.columns) for fr in frames])
+        id_order = [c for c in id_preferred if c in all_cols]
         sample_cols = sorted(c for c in all_cols if c not in set(id_order))
         out_cols = id_order + sample_cols
         frames = [fr.reindex(columns=out_cols) for fr in frames]
