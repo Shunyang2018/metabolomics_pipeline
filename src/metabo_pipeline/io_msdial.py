@@ -9,6 +9,7 @@ from typing import Dict, Iterable, List, Tuple
 # Optional pandas import for faster merging
 try:
     import pandas as pd  # type: ignore
+    import numpy as np  # type: ignore
 
     HAS_PANDAS = True
 except Exception:
@@ -619,8 +620,9 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             # Blank 7x using max across replicates vs blank
             max_val = vals.max(axis=1, skipna=True)
             if blank_col is not None:
-                denom = blank_series.replace(0, pd.NA)
-                blank_fold = (max_val / denom).astype(float)
+                # Use numpy.nan instead of pd.NA to avoid astype issues on older pandas
+                denom = blank_series.replace(0, np.nan)
+                blank_fold = (max_val / denom)
             else:
                 # No blank available → leave as NaN
                 blank_fold = pd.Series([float('nan')]*len(feat_df), index=feat_df.index)
@@ -629,7 +631,8 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             vals_present = vals.where(present)
             mean = vals_present.mean(axis=1, skipna=True)
             std = vals_present.std(axis=1, ddof=1, skipna=True)
-            denom_mean = mean.replace(0, pd.NA)
+            # Use numpy.nan instead of pd.NA to ensure float-friendly ops
+            denom_mean = mean.replace(0, np.nan)
             cv_percent = (std / denom_mean) * 100.0
             # If fewer than 2 replicates present, set NaN
             cv_percent = cv_percent.where(present.sum(axis=1) >= 2)
