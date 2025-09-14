@@ -127,7 +127,7 @@ def merge(
         def _progress(rec: dict):
             log.info(
                 f"[file] {rec.get('file')}: raw={rec.get('raw')}, MS/MS={rec.get('after_msms')}, "
-                f"S/N={rec.get('after_snr')}, pass_all={rec.get('after_pass_all')}"
+                f"S/N={rec.get('after_snr')}, pass_any={rec.get('after_pass')}"
             )
         summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive, progress=_progress)
     except Exception as e:
@@ -140,7 +140,7 @@ def merge(
     if totals:
         log.info(
             f"Totals — raw: {totals.get('raw')}, after MS/MS: {totals.get('after_msms')}, "
-            f"after S/N: {totals.get('after_snr')}, after pass_all: {totals.get('after_pass_all')}"
+            f"after S/N: {totals.get('after_snr')}, after pass_any: {totals.get('after_pass')}"
         )
         pre = summary.get("rows_pre_dedup")
         post = summary.get("rows")
@@ -153,7 +153,7 @@ def merge(
             for rec in per_file:
                 log.info(
                     f" - {rec.get('file')}: raw={rec.get('raw')}, "
-                    f"MS/MS={rec.get('after_msms')}, S/N={rec.get('after_snr')}, pass_all={rec.get('after_pass_all')}"
+                    f"MS/MS={rec.get('after_msms')}, S/N={rec.get('after_snr')}, pass_any={rec.get('after_pass')}"
                 )
     # For wide: 'rows' are features
     log.info(f"Rows written: {summary['rows']}")

@@ -58,7 +58,7 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, perf
   - `blank_fold_<grp>` = max(replicates) / Blank; NaN if Blank missing or zero.
   - `present_percent_<grp>` = percent of replicates with intensity > 0.
   - `cv_percent_<grp>` = CV among present replicates (std/mean × 100; requires ≥ 2 present).
-- Pass flags and gating: `pass_<grp>` is True if `blank_fold ≥ 7`, `present_percent ≥ 60`, `cv_percent ≤ 40`. Features must pass all groups in the file (`pass_all_groups`) to be kept.
+- Pass flags and gating: `pass_<grp>` is True if `blank_fold ≥ 7`, `present_percent ≥ 60`, `cv_percent ≤ 40`. A feature is kept if any group passes (`pass_any_groups`).
 
 **Merging (Wide Format, default)**
 - Reads all alignment tables, applies filters, and appends features (rows) from all sources.

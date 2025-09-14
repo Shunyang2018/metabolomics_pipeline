@@ -708,14 +708,14 @@ def merge_folder_to_wide_csv(
             feat_df[f"pass_{grp}"] = grp_pass.fillna(False)
             pass_cols_this_file.append(f"pass_{grp}")
 
-        # Overall pass: require ALL groups (present in this file) to pass
+        # Overall pass: require ANY group (present in this file) to pass
         if pass_cols_this_file:
-            feat_df["pass_all_groups"] = feat_df[pass_cols_this_file].all(axis=1).fillna(False)
+            feat_df["pass_any_groups"] = feat_df[pass_cols_this_file].any(axis=1).fillna(False)
             # Filter to passing features only
-            feat_df = feat_df[feat_df["pass_all_groups"]]
+            feat_df = feat_df[feat_df["pass_any_groups"]]
 
-        # Count after pass_all gating
-        after_pass_all = int(feat_df.shape[0])
+        # Count after pass_any gating
+        after_pass = int(feat_df.shape[0])
 
         # Update stats
         rec = {
@@ -725,11 +725,19 @@ def merge_folder_to_wide_csv(
             "after_snr": int(df.shape[0]),
             "after_pass_all": after_pass_all,
         }
+        # Update stats
+        rec = {
+            "file": p.name,  # type: ignore
+            "raw": raw_count,
+            "after_msms": after_msms,
+            "after_snr": int(df.shape[0]),
+            "after_pass": after_pass,
+        }
         per_file_stats.append(rec)
         totals["raw"] += raw_count
         totals["after_msms"] += after_msms
         totals["after_snr"] += int(df.shape[0])
-        totals["after_pass_all"] += after_pass_all
+        totals["after_pass"] += after_pass
 
         # Emit progress to caller if requested
         if progress is not None:
@@ -780,7 +788,7 @@ def merge_folder_to_wide_csv(
         metric_cols = sorted(
             c for c in all_cols if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_"))
         )
-        pass_cols = sorted(c for c in all_cols if str(c).startswith("pass_") or c == "pass_all_groups")
+        pass_cols = sorted(c for c in all_cols if str(c).startswith("pass_") or c == "pass_any_groups")
         # Identify sample columns by pattern and exclude filters/ids
         sample_pat = re.compile(r"^m2_[a-z0-9]+_.+")
         sample_cols = sorted(
