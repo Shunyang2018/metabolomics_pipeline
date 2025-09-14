@@ -608,6 +608,13 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
                 continue
             group_cols.setdefault(grp, []).append(c)
 
+        # Thresholds (fixed for now; can be parameterized later)
+        BLANK_FOLD_MIN = 7.0
+        PRESENT_PERCENT_MIN = 60.0
+        CV_PERCENT_MAX = 40.0
+
+        pass_cols_this_file: List[str] = []
+
         # Compute metrics per group and append as trailing columns
         for grp, cols_grp in group_cols.items():
             vals = feat_df[cols_grp].apply(pd.to_numeric, errors="coerce")
@@ -641,6 +648,21 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             feat_df[f"blank_fold_{grp}"] = blank_fold
             feat_df[f"present_percent_{grp}"] = present_percent
             feat_df[f"cv_percent_{grp}"] = cv_percent
+
+            # Pass flag for this group
+            grp_pass = (
+                (blank_fold >= BLANK_FOLD_MIN) &
+                (present_percent >= PRESENT_PERCENT_MIN) &
+                (cv_percent <= CV_PERCENT_MAX)
+            )
+            feat_df[f"pass_{grp}"] = grp_pass.fillna(False)
+            pass_cols_this_file.append(f"pass_{grp}")
+
+        # Overall pass: require ALL groups (present in this file) to pass
+        if pass_cols_this_file:
+            feat_df["pass_all_groups"] = feat_df[pass_cols_this_file].all(axis=1).fillna(False)
+            # Filter to passing features only
+            feat_df = feat_df[feat_df["pass_all_groups"]]
         frames.append(feat_df)
 
     if frames:
@@ -681,6 +703,7 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         metric_cols = sorted(
             c for c in all_cols if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_"))
         )
+        pass_cols = sorted(c for c in all_cols if str(c).startswith("pass_") or c == "pass_all_groups")
         # Identify sample columns by pattern and exclude filters/ids
         sample_pat = re.compile(r"^m2_[a-z0-9]+_.+")
         sample_cols = sorted(
@@ -688,8 +711,8 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             if (c not in set(id_order)) and (c not in set(metric_cols)) and sample_pat.match(str(c))
         )
         # Everything else (rare leftovers) goes between id and samples
-        other_cols = sorted(c for c in all_cols if c not in set(id_order + sample_cols + metric_cols))
-        out_cols = id_order + other_cols + sample_cols + metric_cols
+        other_cols = sorted(c for c in all_cols if c not in set(id_order + sample_cols + metric_cols + pass_cols))
+        out_cols = id_order + other_cols + sample_cols + metric_cols + pass_cols
         frames = [fr.reindex(columns=out_cols) for fr in frames]
         merged = pd.concat(frames, ignore_index=True)
     else:
