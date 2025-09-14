@@ -51,6 +51,32 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, perf
   - `M2_C18_TV_5+6_POS` → `m2_tv_5+6`
   - `M2_Hilic_PE_3+4_neg` → `m2_pe_3+4`
 
+## Processing Logic
+
+**Filtering**
+- MS/MS spectrum required with ≥ 3 nonzero fragment ions (parses `MS/MS spectrum`).
+- S/N pre-filter: drops rows with `S/N average < 5.0` (if column present).
+- Replicate-group QC (per file): groups inferred from normalized sample names (e.g., `m2_tv_1+2`, `m2_tv_3+4`). For each group:
+  - `blank_fold_<grp>` = max(replicates) / Blank; NaN if Blank missing or zero.
+  - `present_percent_<grp>` = percent of replicates with intensity > 0.
+  - `cv_percent_<grp>` = CV among present replicates (std/mean × 100; requires ≥ 2 present).
+- Pass flags and gating: `pass_<grp>` is True if `blank_fold ≥ 7`, `present_percent ≥ 60`, `cv_percent ≤ 40`. Features must pass all groups in the file (`pass_all_groups`) to be kept.
+
+**Merging (Wide Format, default)**
+- Reads all alignment tables, applies filters, and appends features (rows) from all sources.
+- Normalizes sample columns to a common set across assays (HILIC/C18/Lipidomics), keeping one column per biological sample.
+- Leading columns: `isomer_label`, `chrom`, `annotation_level`, `alignment_id`, `rt_min`, `mz`, `metabolite_name`, `adduct`, followed by optional MS‑DIAL metadata, then sample columns, then QC metrics and pass flags.
+
+**Isomer Labeling**
+- Within each file, cluster by RT inside (`metabolite_name`, `adduct`) with a 1.0 min window.
+- Assign ordered labels by RT: `isomer_1`, `isomer_2`, …
+- After merging, suffix the `metabolite_name` with its isomer label (e.g., `Adenine_isomer_1`) so isomers are distinct for downstream steps.
+
+**Deduplication**
+- Runs after all files are merged, at the name level (post isomer suffix).
+- One row per `metabolite_name`: keep the row with lowest `cv_median_percent` (median of group CVs), breaking ties by highest average intensity across normalized sample columns.
+- Other evidence (e.g., scores) is retained as columns but not used to rank by default.
+
 ## Dev Notes
 - Data files are ignored by `.gitignore` (see rules for `M2_*.csv`, `M2 data/`, and archives).
 - Line endings normalized via `.gitattributes`.
