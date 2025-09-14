@@ -108,7 +108,13 @@ def diag():
 @app.command()
 def merge(
     input_dir: str = typer.Argument(..., help="Folder containing MS-DIAL CSV/TXT files"),
-    output_csv: str = typer.Option("outputs/merged.csv", help="Path to write merged CSV"),
+    output_csv: str = typer.Option(
+        "outputs/merged.csv",
+        "--output",
+        "--output-csv",
+        "-o",
+        help="Path to write merged CSV",
+    ),
     recursive: bool = typer.Option(False, help="Recurse into subfolders"),
 ):
     """Merge HILIC/C18/Lipidomics files (wide format, one feature per row)."""
