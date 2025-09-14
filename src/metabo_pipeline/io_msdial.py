@@ -613,6 +613,11 @@ def merge_folder_to_wide_csv(
             if src in feat_df.columns and dst not in feat_df.columns:
                 feat_df[dst] = feat_df[src]
 
+        # Append normalized sample intensity columns to the feature frame
+        norm_sample_cols = list(rename_samples.values())
+        if norm_sample_cols:
+            feat_df = pd.concat([feat_df, df[norm_sample_cols]], axis=1)
+
         # Isomer labeling by RT clustering within metabolite_name + adduct
         RT_CLUSTER_WINDOW = ISOMER_RT_WINDOW_MIN  # minutes
         if all(c in feat_df.columns for c in ("metabolite_name", "adduct", "rt_min")):
