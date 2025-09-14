@@ -401,6 +401,11 @@ def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dic
         # Filter features based on MS/MS ions count >= 3
         df["_msms_ion_count"] = df.get("MS/MS spectrum", "").map(count_msms_ions)
         df = df[df["_msms_ion_count"] >= 3].copy()
+        # Additional pre-merge filter: S/N average threshold
+        if "S/N average" in df.columns:
+            SNR_MIN = 5.0
+            sn = pd.to_numeric(df["S/N average"], errors="coerce")
+            df = df[sn >= SNR_MIN].copy()
 
         # Assign annotation level per feature
         df["annotation_level"] = df.apply(assign_level, axis=1)
@@ -691,59 +696,6 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             # Filter to passing features only
             feat_df = feat_df[feat_df["pass_all_groups"]]
 
-        # --- Cross-mode/chrom/adduct deduplication by CV ---
-        # Compute aggregate CV and presence across groups for ranking
-        cv_cols = [c for c in feat_df.columns if str(c).startswith("cv_percent_")]
-        pres_cols = [c for c in feat_df.columns if str(c).startswith("present_percent_")]
-        pass_cols = [c for c in feat_df.columns if str(c).startswith("pass_") and c != "pass_all_groups"]
-
-        if cv_cols:
-            feat_df["cv_median_percent"] = feat_df[cv_cols].median(axis=1, skipna=True)
-        else:
-            feat_df["cv_median_percent"] = np.nan
-        if pres_cols:
-            feat_df["present_median_percent"] = feat_df[pres_cols].median(axis=1, skipna=True)
-        else:
-            feat_df["present_median_percent"] = np.nan
-        if pass_cols:
-            # sum of True values across groups
-            feat_df["pass_groups_count"] = feat_df[pass_cols].sum(axis=1)
-        else:
-            feat_df["pass_groups_count"] = 0
-
-        # Ensure weighted_dot is numeric if present
-        if "weighted_dot" in feat_df.columns:
-            feat_df["weighted_dot"] = pd.to_numeric(feat_df["weighted_dot"], errors="coerce")
-        else:
-            feat_df["weighted_dot"] = np.nan
-
-        # For duplicates across different chrom/mode/adduct for the same metabolite and isomer,
-        # keep the representative with the best (lowest) cv_median_percent, then highest weighted_dot,
-        # then highest present_median_percent, then highest pass_groups_count.
-        if all(c in feat_df.columns for c in ("metabolite_name", "isomer_label")):
-            def _mark_best(g):
-                # Sorting: cv asc (NaN last), weighted_dot desc, present desc, pass count desc
-                g = g.copy()
-                # Replace NaN cv with +inf to sort last
-                cv = g["cv_median_percent"].astype(float)
-                cv_fill = cv.fillna(np.inf)
-                sort_keys = [
-                    cv_fill,
-                    -g["weighted_dot"].fillna(-1e9),
-                    -g["present_median_percent"].fillna(-1e9),
-                    -g["pass_groups_count"].fillna(-1e9),
-                ]
-                order = np.lexsort(tuple(reversed(sort_keys)))  # lexsort uses last key primary
-                best_idx = g.index[order][0] if len(order) else g.index[0]
-                g["keep_rep_cv"] = False
-                g.loc[best_idx, "keep_rep_cv"] = True
-                g.loc[g["keep_rep_cv"], "dedup_method"] = "cv_best_within_name_isomer"
-                g.loc[~g["keep_rep_cv"], "dedup_method"] = "cv_dropped_within_name_isomer"
-                return g
-
-            feat_df = feat_df.groupby(["metabolite_name", "isomer_label"], dropna=False, group_keys=False).apply(_mark_best)
-            # Drop non-representatives
-            feat_df = feat_df[feat_df["keep_rep_cv"]]
         frames.append(feat_df)
 
     if frames:
@@ -797,6 +749,42 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         out_cols = id_order + other_cols + sample_cols + metric_cols + pass_cols
         frames = [fr.reindex(columns=out_cols) for fr in frames]
         merged = pd.concat(frames, ignore_index=True)
+
+        # After merging all files: append isomer label to metabolite_name and deduplicate by name
+        if "isomer_label" in merged.columns and "metabolite_name" in merged.columns:
+            merged["metabolite_name"] = merged.apply(
+                lambda r: f"{r['metabolite_name']}_{r['isomer_label']}" if isinstance(r.get("isomer_label"), str) and r["isomer_label"] else r["metabolite_name"],
+                axis=1,
+            )
+
+        # Compute cv median percent from per-group metrics
+        cv_cols_all = [c for c in merged.columns if str(c).startswith("cv_percent_")]
+        if cv_cols_all:
+            merged["cv_median_percent"] = merged[cv_cols_all].median(axis=1, skipna=True)
+        else:
+            merged["cv_median_percent"] = np.nan
+
+        # Compute average intensity across normalized sample columns
+        sample_pat_all = re.compile(r"^m2_[a-z0-9]+_.+")
+        sample_cols_all = [c for c in merged.columns if sample_pat_all.match(str(c))]
+        if sample_cols_all:
+            merged["_avg_intensity"] = merged[sample_cols_all].apply(pd.to_numeric, errors="coerce").mean(axis=1, skipna=True)
+        else:
+            merged["_avg_intensity"] = np.nan
+
+        # Deduplicate rows with the same metabolite_name (post-isomer suffix):
+        # keep the one with lowest cv_median_percent, then highest average intensity
+        if "metabolite_name" in merged.columns:
+            def _pick_best(g: "pd.DataFrame") -> "pd.DataFrame":
+                g = g.copy()
+                cv = pd.to_numeric(g["cv_median_percent"], errors="coerce")
+                g["_cv_sort"] = cv.fillna(np.inf)
+                g = g.sort_values(["_cv_sort", "_avg_intensity"], ascending=[True, False])
+                return g.head(1)
+
+            merged = merged.groupby("metabolite_name", dropna=False, group_keys=False).apply(_pick_best)
+            merged = merged.drop(columns=["_cv_sort"], errors="ignore")
+        merged = merged.drop(columns=["_avg_intensity"], errors="ignore")
     else:
         merged = pd.DataFrame(columns=["chrom", "annotation_level", "alignment_id", "rt_min", "mz", "metabolite_name", "adduct"])  # type: ignore
 
