@@ -501,7 +501,7 @@ def merge_folder_to_wide_csv(
     files = list_alignment_files(input_dir, recursive=recursive)
     frames: List["pd.DataFrame"] = []
     # Stats
-    totals = {"raw": 0, "after_msms": 0, "after_snr": 0, "after_pass_all": 0}
+    totals = {"raw": 0, "after_msms": 0, "after_snr": 0, "after_pass": 0}
     per_file_stats: List[Dict[str, int]] = []
 
     def count_msms_ions(msms: str) -> int:
@@ -628,7 +628,10 @@ def merge_folder_to_wide_csv(
                 out = g.copy()
                 out["_isomer_label_tmp"] = labels
                 return out
-            feat_df = feat_df.groupby(["metabolite_name", "adduct"], dropna=False, group_keys=False).apply(_label_group)
+            try:
+                feat_df = feat_df.groupby(["metabolite_name", "adduct"], dropna=False, group_keys=False).apply(_label_group, include_groups=False)
+            except TypeError:
+                feat_df = feat_df.groupby(["metabolite_name", "adduct"], dropna=False, group_keys=False).apply(_label_group)
             feat_df["isomer_label"] = feat_df.pop("_isomer_label_tmp")
             feat_df = feat_df.drop(columns=["_rt_num"], errors="ignore")
         else:
@@ -717,14 +720,6 @@ def merge_folder_to_wide_csv(
         # Count after pass_any gating
         after_pass = int(feat_df.shape[0])
 
-        # Update stats
-        rec = {
-            "file": p.name,  # type: ignore
-            "raw": raw_count,
-            "after_msms": after_msms,
-            "after_snr": int(df.shape[0]),
-            "after_pass_all": after_pass_all,
-        }
         # Update stats
         rec = {
             "file": p.name,  # type: ignore
