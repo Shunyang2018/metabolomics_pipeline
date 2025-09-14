@@ -154,6 +154,17 @@ def merge(
             log.info(
                 f"Annotation levels after dedup — L1: {ann_post.get('1', 0)}, L2: {ann_post.get('2', 0)}, L3: {ann_post.get('3', 0)}"
             )
+        iso_post = summary.get("isomer_post", {}) or {}
+        if iso_post:
+            log.info(
+                f"Isomers after dedup — metabolites with isomers: {iso_post.get('metabolites_with_isomers', 0)}, "
+                f"total isomers: {iso_post.get('total_isomers', 0)}, max per metabolite: {iso_post.get('max_isomers_per_metabolite', 0)}"
+            )
+        # SIRIUS export counts
+        sp = summary.get("sirius_pos_count", 0)
+        sn = summary.get("sirius_neg_count", 0)
+        total_l3 = summary.get("sirius_l3_total", 0)
+        log.info(f"SIRIUS export — L3 total (merged): {total_l3}, POS entries: {sp}, NEG entries: {sn}, unique: {sp + sn}")
         # Per-file breakdown
         per_file = summary.get("per_file", [])
         if per_file:

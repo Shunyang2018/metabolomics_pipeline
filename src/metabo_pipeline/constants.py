@@ -18,3 +18,6 @@ BLANK_FOLD_MIN: float = 7.0      # max(reps) / blank must be >= this
 PRESENT_PERCENT_MIN: float = 60.0  # percent of replicates detected must be >= this
 CV_PERCENT_MAX: float = 40.0       # CV among present replicates must be <= this
 
+# L3 dedup for export/merged
+DEDUP_RT_WINDOW_MIN: float = 0.6   # minutes for L3 clustering
+DEDUP_MZ_PPM: float = 20.0         # ppm window for m/z clustering
