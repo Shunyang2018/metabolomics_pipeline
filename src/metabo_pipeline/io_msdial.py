@@ -583,6 +583,57 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         feat_df = df[base_cols + list(rename_samples.values())].copy()
         feat_df = feat_df.rename(columns={**id_rename, **meta_rename})
         feat_df.insert(0, "chrom", _infer_chrom_from_name(p.name))
+
+        # --- Per-group QC filters ---
+        # Identify blank column if present
+        blank_col = "blank" if "blank" in feat_df.columns else None
+        if blank_col is not None:
+            blank_series = pd.to_numeric(feat_df[blank_col], errors="coerce").fillna(0.0)
+        else:
+            blank_series = pd.Series(0.0, index=feat_df.index)
+
+        # Build mapping of group -> replicate columns for this file
+        group_cols: Dict[str, List[str]] = {}
+        sample_norm_cols = list(rename_samples.values())
+        pat = re.compile(r"^m2_([a-z0-9]+)_(.+)$")
+        for c in sample_norm_cols:
+            if c in ("blank",):
+                continue
+            m = pat.match(c)
+            if not m:
+                continue
+            grp = m.group(1)
+            if grp in ("pool", "qc"):
+                continue
+            group_cols.setdefault(grp, []).append(c)
+
+        # Compute filters per group and append as trailing columns
+        for grp, cols_grp in group_cols.items():
+            vals = feat_df[cols_grp].apply(pd.to_numeric, errors="coerce")
+            nrep = max(1, len(cols_grp))
+            # Presence: intensity > 0 treated as detected
+            present = vals.gt(0)
+            present_frac = present.sum(axis=1) / float(nrep)
+            exist60 = present_frac.ge(0.6)
+
+            # Blank 7x using max across replicates vs blank
+            max_val = vals.max(axis=1, skipna=True)
+            blank7x = max_val.gt(blank_series * 7.0)
+            # If no blank column exists, do not penalize
+            if blank_col is None:
+                blank7x = pd.Series(True, index=feat_df.index)
+
+            # CV <= 40% among present replicates (need at least 2 present)
+            vals_present = vals.where(present)
+            mean = vals_present.mean(axis=1, skipna=True)
+            std = vals_present.std(axis=1, ddof=1, skipna=True)
+            cv = std / mean.replace(0, pd.NA)
+            cv40 = (cv.astype(float) <= 0.4) & (present.sum(axis=1) >= 2) & mean.gt(0)
+
+            # Append columns
+            feat_df[f"filter_blank7x_{grp}"] = blank7x.fillna(False)
+            feat_df[f"filter_exist60_{grp}"] = exist60.fillna(False)
+            feat_df[f"filter_cv40_{grp}"] = cv40.fillna(False)
         frames.append(feat_df)
 
     if frames:
@@ -619,8 +670,17 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         ]
         all_cols = set().union(*[set(fr.columns) for fr in frames])
         id_order = [c for c in id_preferred if c in all_cols]
-        sample_cols = sorted(c for c in all_cols if c not in set(id_order))
-        out_cols = id_order + sample_cols
+        # Identify filter columns (place at end)
+        filter_cols = sorted(c for c in all_cols if c.startswith("filter_"))
+        # Identify sample columns by pattern and exclude filters/ids
+        sample_pat = re.compile(r"^m2_[a-z0-9]+_.+")
+        sample_cols = sorted(
+            c for c in all_cols
+            if (c not in set(id_order)) and (c not in set(filter_cols)) and sample_pat.match(str(c))
+        )
+        # Everything else (rare leftovers) goes between id and samples
+        other_cols = sorted(c for c in all_cols if c not in set(id_order + sample_cols + filter_cols))
+        out_cols = id_order + other_cols + sample_cols + filter_cols
         frames = [fr.reindex(columns=out_cols) for fr in frames]
         merged = pd.concat(frames, ignore_index=True)
     else:
