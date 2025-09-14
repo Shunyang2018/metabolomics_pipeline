@@ -585,7 +585,7 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         feat_df = feat_df.rename(columns={**id_rename, **meta_rename})
 
         # Isomer labeling by RT clustering within metabolite_name + adduct
-        RT_CLUSTER_WINDOW = 0.2  # minutes
+        RT_CLUSTER_WINDOW = 1.0  # minutes (per request)
         if all(c in feat_df.columns for c in ("metabolite_name", "adduct", "rt_min")):
             feat_df["_rt_num"] = pd.to_numeric(feat_df["rt_min"], errors="coerce")
             def _label_group(g):
@@ -690,6 +690,60 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
             feat_df["pass_all_groups"] = feat_df[pass_cols_this_file].all(axis=1).fillna(False)
             # Filter to passing features only
             feat_df = feat_df[feat_df["pass_all_groups"]]
+
+        # --- Cross-mode/chrom/adduct deduplication by CV ---
+        # Compute aggregate CV and presence across groups for ranking
+        cv_cols = [c for c in feat_df.columns if str(c).startswith("cv_percent_")]
+        pres_cols = [c for c in feat_df.columns if str(c).startswith("present_percent_")]
+        pass_cols = [c for c in feat_df.columns if str(c).startswith("pass_") and c != "pass_all_groups"]
+
+        if cv_cols:
+            feat_df["cv_median_percent"] = feat_df[cv_cols].median(axis=1, skipna=True)
+        else:
+            feat_df["cv_median_percent"] = np.nan
+        if pres_cols:
+            feat_df["present_median_percent"] = feat_df[pres_cols].median(axis=1, skipna=True)
+        else:
+            feat_df["present_median_percent"] = np.nan
+        if pass_cols:
+            # sum of True values across groups
+            feat_df["pass_groups_count"] = feat_df[pass_cols].sum(axis=1)
+        else:
+            feat_df["pass_groups_count"] = 0
+
+        # Ensure weighted_dot is numeric if present
+        if "weighted_dot" in feat_df.columns:
+            feat_df["weighted_dot"] = pd.to_numeric(feat_df["weighted_dot"], errors="coerce")
+        else:
+            feat_df["weighted_dot"] = np.nan
+
+        # For duplicates across different chrom/mode/adduct for the same metabolite and isomer,
+        # keep the representative with the best (lowest) cv_median_percent, then highest weighted_dot,
+        # then highest present_median_percent, then highest pass_groups_count.
+        if all(c in feat_df.columns for c in ("metabolite_name", "isomer_label")):
+            def _mark_best(g):
+                # Sorting: cv asc (NaN last), weighted_dot desc, present desc, pass count desc
+                g = g.copy()
+                # Replace NaN cv with +inf to sort last
+                cv = g["cv_median_percent"].astype(float)
+                cv_fill = cv.fillna(np.inf)
+                sort_keys = [
+                    cv_fill,
+                    -g["weighted_dot"].fillna(-1e9),
+                    -g["present_median_percent"].fillna(-1e9),
+                    -g["pass_groups_count"].fillna(-1e9),
+                ]
+                order = np.lexsort(tuple(reversed(sort_keys)))  # lexsort uses last key primary
+                best_idx = g.index[order][0] if len(order) else g.index[0]
+                g["keep_rep_cv"] = False
+                g.loc[best_idx, "keep_rep_cv"] = True
+                g.loc[g["keep_rep_cv"], "dedup_method"] = "cv_best_within_name_isomer"
+                g.loc[~g["keep_rep_cv"], "dedup_method"] = "cv_dropped_within_name_isomer"
+                return g
+
+            feat_df = feat_df.groupby(["metabolite_name", "isomer_label"], dropna=False, group_keys=False).apply(_mark_best)
+            # Drop non-representatives
+            feat_df = feat_df[feat_df["keep_rep_cv"]]
         frames.append(feat_df)
 
     if frames:
