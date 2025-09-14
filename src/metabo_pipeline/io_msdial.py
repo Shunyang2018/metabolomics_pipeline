@@ -15,6 +15,16 @@ try:
 except Exception:
     HAS_PANDAS = False
 
+# Shared thresholds/constants
+from .constants import (
+    MSMS_MIN_IONS,
+    SNR_MIN,
+    ISOMER_RT_WINDOW_MIN,
+    BLANK_FOLD_MIN,
+    PRESENT_PERCENT_MIN,
+    CV_PERCENT_MAX,
+)
+
 
 @dataclass
 class MSDialMetadata:
@@ -261,7 +271,7 @@ def iter_alignment_long_rows(path: Path) -> Iterable[Dict[str, str]]:
                 continue
             # Filter by MS/MS presence and minimum ions (>=3)
             msms_val = row[idx_msms] if idx_msms >= 0 and idx_msms < len(row) else ""
-            if _count_msms_ions(msms_val) < 3:
+            if _count_msms_ions(msms_val) < MSMS_MIN_IONS:
                 continue
             alignment_id = row[idx_alignment] if idx_alignment >= 0 else ""
             rt_min = row[idx_rt] if idx_rt >= 0 else ""
@@ -398,12 +408,11 @@ def _merge_folder_to_long_csv_pandas(files: List[Path], output_csv: Path) -> Dic
             sample_start = max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
         sample_cols = cols[sample_start:]
 
-        # Filter features based on MS/MS ions count >= 3
+        # Filter features based on MS/MS ions count >= constant
         df["_msms_ion_count"] = df.get("MS/MS spectrum", "").map(count_msms_ions)
-        df = df[df["_msms_ion_count"] >= 3].copy()
+        df = df[df["_msms_ion_count"] >= MSMS_MIN_IONS].copy()
         # Additional pre-merge filter: S/N average threshold
         if "S/N average" in df.columns:
-            SNR_MIN = 5.0
             sn = pd.to_numeric(df["S/N average"], errors="coerce")
             df = df[sn >= SNR_MIN].copy()
 
@@ -590,7 +599,7 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
         feat_df = feat_df.rename(columns={**id_rename, **meta_rename})
 
         # Isomer labeling by RT clustering within metabolite_name + adduct
-        RT_CLUSTER_WINDOW = 1.0  # minutes (per request)
+        RT_CLUSTER_WINDOW = ISOMER_RT_WINDOW_MIN  # minutes
         if all(c in feat_df.columns for c in ("metabolite_name", "adduct", "rt_min")):
             feat_df["_rt_num"] = pd.to_numeric(feat_df["rt_min"], errors="coerce")
             def _label_group(g):
@@ -640,10 +649,7 @@ def merge_folder_to_wide_csv(input_dir: Path, output_csv: Path, recursive: bool 
                 continue
             group_cols.setdefault(grp, []).append(c)
 
-        # Thresholds (fixed for now; can be parameterized later)
-        BLANK_FOLD_MIN = 7.0
-        PRESENT_PERCENT_MIN = 60.0
-        CV_PERCENT_MAX = 40.0
+        # Thresholds imported from constants
 
         pass_cols_this_file: List[str] = []
 
