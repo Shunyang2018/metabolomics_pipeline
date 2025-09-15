@@ -17,8 +17,7 @@ from .constants import (
 from .utils import infer_chrom_from_name, infer_mode_from_name, normalize_sample_id_core
 from .annotations import annotate_levels
 from .qc import count_msms_ions, build_group_cols, compute_group_metrics, pass_any_mask
-from .isomers import assign_isomer_labels_global
-from .dedup import l3_representatives
+from .dedup import l3_representatives, dedup_name_conflicts_by_cluster
 from .sirius_export import build_ms_entries, write_ms_files
 
 
@@ -110,12 +109,10 @@ def merge_folder_to_wide_csv(
     else:
         merged = pd.DataFrame()
 
-    # Isomer labeling (global)
-    merged = assign_isomer_labels_global(merged, ISOMER_RT_WINDOW_MIN)
+    # Isomer labeling removed per request (no isomer_label column)
 
     # Column ordering: originals first
     id_preferred = [
-        "isomer_label",
         "chrom",
         "annotation_level",
         "Alignment ID",
@@ -155,6 +152,9 @@ def merge_folder_to_wide_csv(
     out_cols = id_order + other_cols + sample_cols + metric_cols
     if out_cols:
         merged = merged.reindex(columns=out_cols)
+
+    # Deduplicate name conflicts within RT/m/z clusters (all rows)
+    merged = dedup_name_conflicts_by_cluster(merged, DEDUP_RT_WINDOW_MIN, DEDUP_MZ_PPM)
 
     # L3 representatives for merged CSV
     rows_pre = int(merged.shape[0])
@@ -197,4 +197,3 @@ def merge_folder_to_wide_csv(
         "sirius_neg_count": sn,
         "sirius_l3_total": sirius_l3_total,
     }
-
