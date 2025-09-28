@@ -18,16 +18,16 @@ def get_logger():
 
         class _RichLogger:
             def info(self, msg: str):
-                console.print(f"[info]»[/] {msg}")
+                console.print(f"[info]{msg}")
 
             def warn(self, msg: str):
-                console.print(f"[warn]»[/] {msg}")
+                console.print(f"[warn]{msg}")
 
             def error(self, msg: str):
-                console.print(f"[error]»[/] {msg}")
+                console.print(f"[error]{msg}")
 
             def ok(self, msg: str):
-                console.print(f"[ok]»[/] {msg}")
+                console.print(f"[ok]{msg}")
 
         return _RichLogger()
     except Exception:

@@ -111,8 +111,17 @@ def merge_folder_to_wide_csv(
 
     # Isomer labeling removed per request (no isomer_label column)
 
+    # Force Level 3 names to 'Unknown' for clarity
+    if "annotation_level" in merged.columns and "Metabolite name" in merged.columns:
+        merged.loc[merged["annotation_level"] == "3", "Metabolite name"] = "Unknown"
+
+    # Assign a stable feature_id across the final merged CSV
+    if len(merged) > 0:
+        merged.insert(0, "feature_id", range(1, len(merged) + 1))
+
     # Column ordering: originals first
     id_preferred = [
+        "feature_id",
         "chrom",
         "annotation_level",
         "Alignment ID",
@@ -156,20 +165,29 @@ def merge_folder_to_wide_csv(
     # Deduplicate name conflicts within RT/m/z clusters (all rows)
     merged = dedup_name_conflicts_by_cluster(merged, DEDUP_RT_WINDOW_MIN, DEDUP_MZ_PPM)
 
-    # L3 representatives for merged CSV
+    # L3 representatives for merged CSV (only keep those that will be exported to SIRIUS)
     rows_pre = int(merged.shape[0])
+    l3_keep_export = None
     if "annotation_level" in merged.columns and not merged.empty:
         l3 = merged[merged["annotation_level"] == "3"].copy()
         non_l3 = merged[merged["annotation_level"] != "3"].copy()
         if not l3.empty:
+            # First get RT/mz representatives
             l3_keep = l3_representatives(l3, DEDUP_RT_WINDOW_MIN, DEDUP_MZ_PPM)
-            merged = pd.concat([non_l3, l3_keep], axis=0, ignore_index=True)
+            # Then restrict to m/z 150–800 (final export set)
+            if "Average Mz" in l3_keep.columns:
+                mzv = pd.to_numeric(l3_keep["Average Mz"], errors="coerce")
+                l3_keep_export = l3_keep[(mzv >= 150.0) & (mzv <= 800.0)].copy()
+            else:
+                l3_keep_export = l3_keep.copy()
+            merged = pd.concat([non_l3, l3_keep_export], axis=0, ignore_index=True)
     rows_post = int(merged.shape[0])
 
-    # SIRIUS export from merged L3 representatives
-    l3_all = merged[merged["annotation_level"] == "3"].copy() if "annotation_level" in merged.columns else pd.DataFrame()
-    sirius_l3_total = int(l3_all.shape[0]) if not l3_all.empty else 0
-    pos_entries, neg_entries = build_ms_entries(l3_all)
+    # SIRIUS export from merged L3 representatives (same set as kept in merged)
+    if l3_keep_export is None:
+        l3_keep_export = pd.DataFrame()
+    sirius_l3_total = int(l3_keep_export.shape[0]) if not l3_keep_export.empty else 0
+    pos_entries, neg_entries = build_ms_entries(l3_keep_export)
     sp, sn = write_ms_files(pos_entries, neg_entries, output_csv.parent)
 
     # Write CSV

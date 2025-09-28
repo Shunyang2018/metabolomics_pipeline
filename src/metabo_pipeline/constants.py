@@ -16,7 +16,7 @@ ISOMER_RT_WINDOW_MIN: float = 1.0  # minutes for RT clustering within metabolite
 # Replicate-group QC thresholds
 BLANK_FOLD_MIN: float = 7.0      # max(reps) / blank must be >= this
 PRESENT_PERCENT_MIN: float = 60.0  # percent of replicates detected must be >= this
-CV_PERCENT_MAX: float = 40.0       # CV among present replicates must be <= this
+CV_PERCENT_MAX: float | None = None  # max CV among present replicates; None disables CV filtering
 
 # L3 dedup for export/merged
 DEDUP_RT_WINDOW_MIN: float = 0.6   # minutes for L3 clustering

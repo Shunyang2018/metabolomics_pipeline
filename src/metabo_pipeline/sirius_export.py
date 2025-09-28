@@ -9,26 +9,52 @@ from .utils import parse_spectrum
 
 
 def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+    """Build SIRIUS .ms entries in classic CLI format using feature_id.
+
+    Format per entry:
+      >compound <feature_id>
+      >parentmass <Average Mz>
+      >retentiontime <Average Rt(min)>
+      >ionization <Adduct type>
+      >feature_id <feature_id>
+
+      >ms1
+      <mz> <intensity>
+      ...
+      >collision
+      <mz> <intensity>
+      ...
+    """
     pos_entries: List[str] = []
     neg_entries: List[str] = []
     for _, r in l3_df.iterrows():
-        name = f"{r.get('Metabolite name','Unknown')}|{r.get('Adduct type','')}|{r.get('Average Rt(min)','')}"
+        fid = r.get("feature_id")
         precursor = r.get("Average Mz", "")
+        rt = r.get("Average Rt(min)", "")
         ion = r.get("Adduct type", "")
         ms1 = parse_spectrum(r.get("MS1 isotopic spectrum", ""))
         ms2 = parse_spectrum(r.get("MS/MS spectrum", ""))
-        block = [
-            f"Name: {name}",
-            f"PrecursorMz: {precursor}",
-            f"Ionization: {ion}",
-        ]
-        if ms1:
-            block.append("MS1:")
-            block.extend([f"{mz} {inten}" for mz, inten in ms1])
-        if ms2:
-            block.append("MS2:")
-            block.extend([f"{mz} {inten}" for mz, inten in ms2])
+
+        # Compose a readable compound name; mandatory in .ms
+        comp_name = str(r.get("Metabolite name") or "").strip() or f"Unknown_{fid}"
+
+        block: List[str] = []
+        block.append(f">compound\t{comp_name}")
+        block.append(f">parentmass\t{precursor}")
+        block.append(f">retentiontime\t{rt}")
+        block.append(f">ionization\t{ion}")
+        # Add a comment with feature_id so downstream tools can recover it without triggering SIRIUS warnings
+        block.append(f"#feature_id {fid}")
         block.append("")
+        block.append(">ms1")
+        for mz, inten in ms1:
+            block.append(f"{mz} {inten}")
+        block.append("")
+        block.append(">collision")
+        for mz, inten in ms2:
+            block.append(f"{mz} {inten}")
+        block.append("")
+
         entry = "\n".join(block)
         pol = "POS" if "+" in str(ion or "") else ("NEG" if "-" in str(ion or "") else "UNK")
         if pol == "POS":
@@ -47,4 +73,3 @@ def write_ms_files(pos_entries: List[str], neg_entries: List[str], out_dir: Path
     if neg_entries:
         neg_path.write_text("\n".join(neg_entries), encoding="utf-8")
     return len(pos_entries), len(neg_entries)
-

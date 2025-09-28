@@ -33,23 +33,30 @@ def l3_representatives(df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float)
         if g.empty:
             continue
         g = g.sort_values(["_rt", "_mz"])  # deterministic
+        # Single-linkage: compare to last member in the current cluster
         cluster_rep: Tuple[int, float, float, float, float] | None = None
+        last_rt = np.nan
+        last_mz = np.nan
         for idx, row in g.iterrows():
             rt = row["_rt"]; mz = row["_mz"]
             sn = row["_sn"] if pd.notna(row["_sn"]) else -1.0
             wd = row["_wd"] if pd.notna(row["_wd"]) else -1.0
             if cluster_rep is None:
                 cluster_rep = (idx, rt, mz, sn, wd)
+                last_rt, last_mz = rt, mz
                 continue
             _, rep_rt, rep_mz, rep_sn, rep_wd = cluster_rep
-            mz_tol = (mz_ppm * 1e-6) * rep_mz if pd.notna(rep_mz) else np.nan
-            if (pd.notna(rt) and pd.notna(rep_rt) and abs(rt - rep_rt) <= rt_window_min) and \
-               (pd.notna(mz) and pd.notna(rep_mz) and abs(mz - rep_mz) <= mz_tol):
+            mz_tol = (mz_ppm * 1e-6) * last_mz if pd.notna(last_mz) else np.nan
+            if (pd.notna(rt) and pd.notna(last_rt) and abs(rt - last_rt) <= rt_window_min) and \
+               (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
                 if (sn, wd) > (rep_sn, rep_wd):
                     cluster_rep = (idx, rt, mz, sn, wd)
+                # extend cluster
+                last_rt, last_mz = rt, mz
             else:
                 keep_idx.append(cluster_rep[0])
                 cluster_rep = (idx, rt, mz, sn, wd)
+                last_rt, last_mz = rt, mz
         if cluster_rep is not None:
             keep_idx.append(cluster_rep[0])
 
@@ -94,18 +101,19 @@ def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_p
             continue
         g = g.sort_values(["_rt", "_mz"])  # deterministic
         cluster_members: List[int] = []
-        rep_rt = np.nan
-        rep_mz = np.nan
+        # Single-linkage: compare to last member
+        last_rt = np.nan
+        last_mz = np.nan
         for idx, row in g.iterrows():
             rt = row["_rt"]; mz = row["_mz"]
-            if isinstance(rep_rt, float) and np.isnan(rep_rt):
+            if isinstance(last_rt, float) and np.isnan(last_rt):
                 # start cluster
                 cluster_members = [idx]
-                rep_rt, rep_mz = rt, mz
+                last_rt, last_mz = rt, mz
                 continue
-            mz_tol = (mz_ppm * 1e-6) * rep_mz if pd.notna(rep_mz) else np.nan
-            if (pd.notna(rt) and pd.notna(rep_rt) and abs(rt - rep_rt) <= rt_window_min) and \
-               (pd.notna(mz) and pd.notna(rep_mz) and abs(mz - rep_mz) <= mz_tol):
+            mz_tol = (mz_ppm * 1e-6) * last_mz if pd.notna(last_mz) else np.nan
+            if (pd.notna(rt) and pd.notna(last_rt) and abs(rt - last_rt) <= rt_window_min) and \
+               (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
                 cluster_members.append(idx)
             else:
                 # finalize previous cluster: pick one per Metabolite name
@@ -117,7 +125,7 @@ def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_p
                     picked_idx.append(subg.index[0])
                 # start new cluster
                 cluster_members = [idx]
-                rep_rt, rep_mz = rt, mz
+                last_rt, last_mz = rt, mz
         # finalize last cluster
         if cluster_members:
             sub = work.loc[cluster_members]
@@ -131,4 +139,3 @@ def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_p
     # Clean helpers
     reps = reps.drop(columns=["_adduct_export", "_polarity", "_rt", "_mz", "_sn", "_wd", "_cv_med", "_cv_sort"], errors="ignore")
     return reps
-

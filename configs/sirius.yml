@@ -1,0 +1,36 @@
+sirius:
+  executable: sirius  # Windows: C:\Program Files\SIRIUS\sirius.exe; macOS: /Applications/sirius.app/Contents/MacOS/sirius
+  cores: 8
+  mzdev_ppm: 10.0
+adducts:
+  neg_detectable: '[[M - H]-, [M - H2O - H]-]'
+  neg_fallback: '[[M]-, [M + CH2O2 - H]-, [M + C2HF3O2 - H]-, [M - H + Na - H]-, [M
+    - H + K - H]-, [M + C2H4O2 - H]-, [M + C2H3N - H]-, [M - H]-, [M - H2O - H]-]'
+  pos_detectable: '[[M + H]+, [M + Na]+]'
+  pos_fallback: '[[M]+, [M + NH4]+, [M + Na]+, [M + K]+, [M + CH3OH + H]+, [M + ACN
+    + H]+, [M + 2Na - H]+]'
+common_config:
+- --IsotopeSettings.filter=true
+- --FormulaSearchDB=
+- --Timeout.secondsPerTree=0
+- --FormulaSettings.enforced=HCNOPS
+- --Timeout.secondsPerInstance=0
+- --UseHeuristic.mzToUseHeuristicOnly=650
+- --AlgorithmProfile=orbitrap
+- --IsotopeMs2Settings=IGNORE
+- --MS2MassDeviation.allowedMassDeviation=10.0ppm
+- --NumberOfCandidatesPerIon=1
+- --UseHeuristic.mzToUseHeuristic=300
+- --FormulaSettings.detectable=,
+- --NumberOfCandidates=10
+- --AdductSettings.enforced=,
+- --FormulaResultThreshold=true
+- --InjectElGordoCompounds=true
+- --StructureSearchDB=BIO,METACYC,CHEBI,COCONUT,ECOCYCMINE,GNPS,HMDB,HSDB,KEGG,KEGGMINE,KNAPSACK,MACONDA,MESH,NORMAN,UNDP,PLANTCYC,PUBCHEM,PUBMED,YMDB,YMDBMINE,ZINCBIO
+- --RecomputeResults
+- 'true'
+tasks:
+- formula
+- fingerprint
+- structure
+- canopus

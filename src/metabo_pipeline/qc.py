@@ -44,10 +44,33 @@ def build_group_cols(sample_cols: List[str]) -> Dict[str, List[str]]:
 
 def compute_group_metrics(df: pd.DataFrame, group_cols: Dict[str, List[str]], blank_col: str | None) -> pd.DataFrame:
     df = df.copy()
+
+    # Gather blank columns (explicit 'blank' plus any column whose token equals 'blank').
+    blank_cols: List[str] = []
     if blank_col is not None and blank_col in df.columns:
-        blank_series = pd.to_numeric(df[blank_col], errors="coerce")
+        blank_cols.append(blank_col)
+    for col in df.columns:
+        if col == blank_col:
+            continue
+        tokens = [tok for tok in str(col).lower().replace('-', '_').split('_') if tok]
+        if "blank" in tokens:
+            blank_cols.append(col)
+
+    blank_values = None
+    if blank_cols:
+        blank_values = df[blank_cols].apply(pd.to_numeric, errors="coerce")
+        blank_avg = blank_values.mean(axis=1, skipna=True)
+        blank_denom = blank_avg.replace(0, np.nan)
     else:
-        blank_series = None
+        blank_avg = pd.Series([float('nan')] * len(df), index=df.index)
+        blank_denom = blank_avg
+
+    sample_cols_all: List[str] = sorted({c for cols in group_cols.values() for c in cols})
+    if sample_cols_all:
+        sample_vals = df[sample_cols_all].apply(pd.to_numeric, errors="coerce")
+        max_all_samples = sample_vals.max(axis=1, skipna=True)
+    else:
+        max_all_samples = pd.Series([float('nan')] * len(df), index=df.index)
 
     for grp, cols_grp in group_cols.items():
         vals = df[cols_grp].apply(pd.to_numeric, errors="coerce")
@@ -56,12 +79,7 @@ def compute_group_metrics(df: pd.DataFrame, group_cols: Dict[str, List[str]], bl
         present_frac = present.sum(axis=1) / float(nrep)
         present_percent = (present_frac * 100.0).astype(float)
 
-        max_val = vals.max(axis=1, skipna=True)
-        if blank_series is not None:
-            denom = blank_series.replace(0, np.nan)
-            blank_fold = (max_val / denom)
-        else:
-            blank_fold = pd.Series([float('nan')]*len(df), index=df.index)
+        blank_fold = max_all_samples / blank_denom
 
         vals_present = vals.where(present)
         mean = vals_present.mean(axis=1, skipna=True)
@@ -76,13 +94,25 @@ def compute_group_metrics(df: pd.DataFrame, group_cols: Dict[str, List[str]], bl
     return df
 
 
-def pass_any_mask(df: pd.DataFrame, group_cols: Dict[str, List[str]], blank_fold_min: float, present_min: float, cv_max: float) -> pd.Series:
+def pass_any_mask(
+    df: pd.DataFrame,
+    group_cols: Dict[str, List[str]],
+    blank_fold_min: float,
+    present_min: float,
+    cv_max: float | None,
+) -> pd.Series:
     passes = []
     for grp in group_cols.keys():
         bf = df.get(f"blank_fold_{grp}")
         pp = df.get(f"present_percent_{grp}")
         cv = df.get(f"cv_percent_{grp}")
-        mask = (bf.astype(float) >= blank_fold_min) & (pp.astype(float) >= present_min) & (cv.astype(float) <= cv_max)
+
+        bf_series = pd.to_numeric(bf, errors="coerce") if bf is not None else pd.Series(np.nan, index=df.index)
+        pp_series = pd.to_numeric(pp, errors="coerce") if pp is not None else pd.Series(np.nan, index=df.index)
+        mask = (bf_series >= blank_fold_min) & (pp_series >= present_min)
+        if cv_max is not None and cv is not None:
+            cv_series = pd.to_numeric(cv, errors="coerce")
+            mask = mask & (cv_series <= cv_max)
         mask = mask.fillna(False)
         passes.append(mask)
     if not passes:
