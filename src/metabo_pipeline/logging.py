@@ -4,6 +4,7 @@ import sys
 
 
 def get_logger():
+    """Return a lightweight console logger with optional rich styling."""
     try:
         from rich.console import Console
         from rich.theme import Theme
@@ -45,4 +46,3 @@ def get_logger():
                 print(f"OK: {msg}")
 
         return _PlainLogger()
-

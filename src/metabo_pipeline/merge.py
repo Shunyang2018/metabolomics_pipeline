@@ -1,13 +1,14 @@
 from __future__ import annotations
 
-import pandas as pd
+import re
 from pathlib import Path
-from typing import Dict, List, Optional, Callable
+from typing import Callable, Dict, List, Optional
+
+import pandas as pd
 
 from .constants import (
     MSMS_MIN_IONS,
     SNR_MIN,
-    ISOMER_RT_WINDOW_MIN,
     DEDUP_RT_WINDOW_MIN,
     DEDUP_MZ_PPM,
     BLANK_FOLD_MIN,
@@ -17,11 +18,12 @@ from .constants import (
 from .utils import infer_chrom_from_name, infer_mode_from_name, normalize_sample_id_core
 from .annotations import annotate_levels
 from .qc import count_msms_ions, build_group_cols, compute_group_metrics, pass_any_mask
-from .dedup import l3_representatives, dedup_name_conflicts_by_cluster
+from .dedup import l3_representatives
 from .sirius_export import build_ms_entries, write_ms_files
 
 
 def list_alignment_files(input_dir: Path, recursive: bool = False) -> List[Path]:
+    """Return sorted MS-DIAL alignment files under a directory."""
     pats = ["*.csv", "*.txt"]
     files: List[Path] = []
     if recursive:
@@ -39,6 +41,7 @@ def merge_folder_to_wide_csv(
     recursive: bool = False,
     progress: Optional[Callable[[Dict[str, int]], None]] = None,
 ) -> Dict[str, int]:
+    """Merge filtered MS-DIAL tables into a single wide-format CSV."""
     files = list_alignment_files(input_dir, recursive=recursive)
     totals = {"raw": 0, "after_msms": 0, "after_snr": 0, "after_pass": 0, "ann1": 0, "ann2": 0, "ann3": 0}
     per_file: List[Dict[str, int]] = []
@@ -46,10 +49,7 @@ def merge_folder_to_wide_csv(
     frames: List[pd.DataFrame] = []
     for p in files:
         # Read with header row at line 5 (0-based index 4)
-        try:
-            df = pd.read_csv(p, header=4, encoding="utf-8-sig")
-        except Exception:
-            df = pd.read_csv(p, header=4, encoding="utf-8-sig", engine="python")
+        df = pd.read_csv(p, header=4, encoding="utf-8-sig")
 
         cols = list(df.columns)
         last_meta_col = cols.index("MS/MS spectrum") if "MS/MS spectrum" in cols else max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
@@ -77,8 +77,15 @@ def merge_folder_to_wide_csv(
             feat_df = pd.concat([feat_df, df[norm_sample_cols]], axis=1)
 
         # chrom/mode from filename
-        feat_df.insert(0, "chrom", infer_chrom_from_name(p.name))
-        feat_df.insert(1, "mode", infer_mode_from_name(p.name))
+        chrom = infer_chrom_from_name(p.name)
+        mode = infer_mode_from_name(p.name)
+        if mode == "UNK":
+            raise ValueError(
+                f"Cannot infer polarity from filename '{p.name}'. "
+                "Ensure filenames contain 'POS' or 'NEG'."
+            )
+        feat_df.insert(0, "chrom", chrom)
+        feat_df.insert(1, "mode", mode)
 
         # Per-group QC metrics and gating
         blank_col = "blank" if "blank" in feat_df.columns else None
@@ -96,10 +103,7 @@ def merge_folder_to_wide_csv(
         per_file.append(rec)
         totals["raw"] += raw_cnt; totals["after_msms"] += after_msms; totals["after_snr"] += after_snr; totals["after_pass"] += int(feat_df.shape[0]); totals["ann1"] += a1; totals["ann2"] += a2; totals["ann3"] += a3
         if progress:
-            try:
-                progress(rec)
-            except Exception:
-                pass
+            progress(rec)
 
         frames.append(feat_df)
 
@@ -152,18 +156,18 @@ def merge_folder_to_wide_csv(
     ]
     all_cols = set(merged.columns)
     id_order = [c for c in id_preferred if c in all_cols]
-    import re
+
     sample_pat = re.compile(r"^m2_[a-z0-9]+_.+")
     metric_cols = sorted(c for c in all_cols if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_")))
-    pass_cols = sorted(c for c in all_cols if str(c).startswith("pass_") or c in ("pass_any_groups", "mode", "_polarity", "_rt", "_mz", "_sn", "_wd"))
+    pass_cols = sorted(
+        c for c in all_cols
+        if str(c).startswith("pass_") or c in ("pass_any_groups", "_polarity", "_rt", "_mz", "_sn", "_wd")
+    )
     sample_cols = sorted(c for c in all_cols if c not in set(id_order) and c not in set(metric_cols) and c not in set(pass_cols) and sample_pat.match(str(c)))
     other_cols = sorted(c for c in all_cols if c not in set(id_order + sample_cols + metric_cols + pass_cols))
     out_cols = id_order + other_cols + sample_cols + metric_cols
     if out_cols:
         merged = merged.reindex(columns=out_cols)
-
-    # Deduplicate name conflicts within RT/m/z clusters (all rows)
-    merged = dedup_name_conflicts_by_cluster(merged, DEDUP_RT_WINDOW_MIN, DEDUP_MZ_PPM)
 
     # L3 representatives for merged CSV (only keep those that will be exported to SIRIUS)
     rows_pre = int(merged.shape[0])

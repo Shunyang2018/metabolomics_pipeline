@@ -540,11 +540,9 @@ def classify(
     sleep_sec: float = typer.Option(1.0, help="Sleep between API calls (seconds)"),
     results_only: bool = typer.Option(True, help="Write only identifier + classification columns"),
     id_column: str = typer.Option("feature_id", help="Identifier column to include (default: feature_id)"),
-    cache_path: str = typer.Option("outputs/classyfire_cache.json", help="Cache file for InChIKey→taxonomy (json/yaml)"),
+    cache_path: str = typer.Option("outputs/classyfire_cache.json", help="Cache file for InChIKey->taxonomy (JSON)"),
     offline: bool = typer.Option(False, help="Use cache only; skip network calls"),
     timeout: float = typer.Option(15.0, help="Per-request timeout (seconds)"),
-    retries: int = typer.Option(2, help="Retries per InChIKey on transient errors"),
-    backoff: float = typer.Option(1.5, help="Exponential backoff base between retries"),
     join_merged: bool = typer.Option(False, help="Append cf_* columns into the merged table (writes back to input CSV if output path is default)."),
     force_api: bool = typer.Option(False, help="Force API calls even if a classified CSV already exists"),
 ):
@@ -583,7 +581,7 @@ def classify(
                 pass
         def _progress(i: int, n: int, key: str, cached: bool, status: str):
             src = "cache" if cached else "net"
-            log.info(f"[{i}/{n}] {key}  {src}/{status}")
+            log.info(f"[{i}/{n}] {key} -> {src}/{status}")
         summary = classify_level12_with_classyfire(
             input_csv,
             output_csv,
@@ -595,8 +593,6 @@ def classify(
             progress=_progress,
             offline=offline,
             timeout=timeout,
-            retries=retries,
-            backoff=backoff,
         )
     except Exception as e:
         log.error(f"Classification failed: {e}")

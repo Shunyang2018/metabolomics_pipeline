@@ -32,6 +32,7 @@ class MSDialSummary:
 
 
 def _read_first_rows(path: Path, n: int = 6, encoding: str = "utf-8-sig") -> List[List[str]]:
+    """Read the first few header rows from an MS-DIAL export."""
     rows: List[List[str]] = []
     with path.open("r", encoding=encoding, newline="") as f:
         r = csv.reader(f)
@@ -43,6 +44,7 @@ def _read_first_rows(path: Path, n: int = 6, encoding: str = "utf-8-sig") -> Lis
 
 
 def summarize_alignment_table(path: Path) -> MSDialSummary:
+    """Summarize key metadata from an MS-DIAL alignment table."""
     rows = _read_first_rows(path)
     if len(rows) < 5:
         raise ValueError(f"Not enough header rows for MS-DIAL file: {path}")
@@ -54,29 +56,14 @@ def summarize_alignment_table(path: Path) -> MSDialSummary:
     header_row = rows[4]
 
     # Determine sample start after the last fixed column (MS/MS spectrum)
-    try:
-        sample_start = header_row.index("MS/MS spectrum") + 1
-    except ValueError:
-        # fallback heuristic
-        try:
-            align_idx = header_row.index("Alignment ID")
-        except ValueError:
-            align_idx = 0
-        sample_start = max(align_idx + 1, 30)
-
+    sample_start = header_row.index("MS/MS spectrum") + 1
     sample_names = header_row[sample_start:]
 
     def _map_from(row: List[str]) -> Dict[str, str]:
         return {s: v for s, v in zip(sample_names, row[sample_start:])}
 
     def _int_map_from(row: List[str]) -> Dict[str, int]:
-        out: Dict[str, int] = {}
-        for s, v in zip(sample_names, row[sample_start:]):
-            try:
-                out[s] = int(v)
-            except Exception:
-                out[s] = 0
-        return out
+        return {s: int(v) for s, v in zip(sample_names, row[sample_start:])}
 
     meta = MSDialMetadata(
         classes=_map_from(class_row),

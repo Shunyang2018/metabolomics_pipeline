@@ -7,6 +7,7 @@ from pathlib import Path
 from typing import List, Optional, Tuple
 
 def _collect_default_candidates(system: str, exe_name: str) -> List[Tuple[str, str]]:
+    """Enumerate platform-specific fallback paths for the SIRIUS executable."""
     candidates: List[Tuple[str, str]] = []
     # Shared environment hints
     sirius_home = os.environ.get("SIRIUS_HOME")

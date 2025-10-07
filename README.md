@@ -145,6 +145,7 @@ SIRIUS merge behavior
 ## Dev Notes
 - Data files are git-ignored (e.g., `M2_*.csv`, data folders, archives).
 - Line endings are normalized via `.gitattributes`.
+- Formatting is enforced via pre-commit/Black 24.8.0 (`pip install pre-commit`, run `pre-commit install`, and `pre-commit run --all-files` for a full check).
 
 ## License
 TBD.

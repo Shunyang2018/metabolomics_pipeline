@@ -1,21 +1,18 @@
 from __future__ import annotations
 
-import time
 import json
+import time
 from pathlib import Path
-from typing import Callable, Dict, Iterable, List, Optional, Tuple
+from time import perf_counter
+from typing import Callable, Dict, Optional
 
-import requests
-import yaml
 import pandas as pd
-
+import requests
 
 def _fetch_classyfire(
     inchikey: str,
     base_url: str = "http://classyfire.wishartlab.com",
     timeout: float = 15.0,
-    retries: int = 1,
-    backoff: float = 1.5,
 ) -> Optional[Dict]:
     """Fetch classification for an InChIKey from ClassyFire.
 
@@ -30,22 +27,17 @@ def _fetch_classyfire(
         f"{base_url}/entities/{inchikey}",
         f"{base_url}/classification?inchikey={inchikey}",
     ]
-    attempt = 0
-    while attempt <= max(0, retries):
-        for url in urls:
-            try:
-                r = requests.get(url, timeout=timeout)
-                if r.status_code == 200:
-                    return r.json()
-                if r.status_code in (429, 500, 502, 503, 504):
-                    # transient; try next url or next attempt
-                    continue
-            except Exception:
-                # network error; try next url or next attempt
+    for url in urls:
+        try:
+            r = requests.get(url, timeout=timeout)
+            if r.status_code == 200:
+                return r.json()
+            if r.status_code in (429, 500, 502, 503, 504):
+                # transient; try next url
                 continue
-        attempt += 1
-        if attempt <= retries:
-            time.sleep(backoff ** (attempt - 1))
+        except requests.RequestException:
+            # network error; try next url
+            continue
     return None
 
 
@@ -90,45 +82,42 @@ def _extract_taxonomy(cf: Dict) -> Dict[str, Optional[str]]:
 
 
 def _load_cache(path: Optional[str]) -> Dict[str, Dict[str, Optional[str]]]:
+    """Load cached taxonomy results from a JSON file."""
     if not path:
         return {}
     p = Path(path)
     if not p.exists():
         return {}
     try:
-        if p.suffix.lower() in (".yml", ".yaml"):
-            data = yaml.safe_load(p.read_text(encoding="utf-8")) or {}
-        else:
-            data = json.loads(p.read_text(encoding="utf-8"))
-        # normalize keys to str and values to dict of expected fields
-        out: Dict[str, Dict[str, Optional[str]]] = {}
-        for k, v in (data or {}).items():
-            if isinstance(v, dict):
-                out[str(k)] = {
-                    "cf_kingdom": v.get("cf_kingdom"),
-                    "cf_superclass": v.get("cf_superclass"),
-                    "cf_class": v.get("cf_class"),
-                    "cf_subclass": v.get("cf_subclass"),
-                    "cf_direct_parent": v.get("cf_direct_parent"),
-                }
-        return out
-    except Exception:
+        data = json.loads(p.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError, TypeError):
         return {}
+    # normalize keys to str and values to dict of expected fields
+    out: Dict[str, Dict[str, Optional[str]]] = {}
+    for k, v in (data or {}).items():
+        if isinstance(v, dict):
+            out[str(k)] = {
+                "cf_kingdom": v.get("cf_kingdom"),
+                "cf_superclass": v.get("cf_superclass"),
+                "cf_class": v.get("cf_class"),
+                "cf_subclass": v.get("cf_subclass"),
+                "cf_direct_parent": v.get("cf_direct_parent"),
+            }
+    return out
 
 
 def _save_cache(path: Optional[str], cache: Dict[str, Dict[str, Optional[str]]]) -> None:
+    """Persist taxonomy cache data to a JSON file."""
     if not path:
         return
     p = Path(path)
     p.parent.mkdir(parents=True, exist_ok=True)
     try:
-        if p.suffix.lower() in (".yml", ".yaml"):
-            p.write_text(yaml.safe_dump(cache, sort_keys=True, allow_unicode=True), encoding="utf-8")
-        else:
-            p.write_text(json.dumps(cache, ensure_ascii=False, indent=2, sort_keys=True), encoding="utf-8")
-    except Exception:
-        # Swallow cache write errors (non-fatal)
-        pass
+        payload = json.dumps(cache, ensure_ascii=False, indent=2, sort_keys=True)
+        p.write_text(payload, encoding="utf-8")
+    except (OSError, TypeError):
+        # Non-fatal cache write errors should not stop classification
+        return
 
 
 def probe_classyfire(base_url: str, timeout: float = 10.0) -> Dict[str, object]:
@@ -146,18 +135,17 @@ def probe_classyfire(base_url: str, timeout: float = 10.0) -> Dict[str, object]:
     for u in urls:
         rec: Dict[str, object] = {"url": u, "ok": False, "ms": None, "status": None, "error": None}
         try:
-            import time as _t
-            t0 = _t.perf_counter()
+            t0 = perf_counter()
             r = requests.get(u, timeout=timeout)
-            dt = int(( _t.perf_counter() - t0) * 1000)
+            dt = int((perf_counter() - t0) * 1000)
             rec["ms"] = dt
             rec["status"] = r.status_code
             if r.status_code == 200:
                 rec["ok"] = True
             else:
                 out["ok"] = False
-        except Exception as e:
-            rec["error"] = str(e)
+        except requests.RequestException as exc:
+            rec["error"] = str(exc)
             out["ok"] = False
         out["checks"].append(rec)
     return out
@@ -174,21 +162,17 @@ def classify_level12_with_classyfire(
     progress: Optional[Callable[[int, int, str, bool, str], None]] = None,
     offline: bool = False,
     timeout: float = 15.0,
-    retries: int = 2,
-    backoff: float = 1.5,
 ) -> Dict[str, int]:
     """Classify Level 1/2 rows via ClassyFire using unique InChIKeys and merge back.
 
     Returns a summary dict with counts.
     """
     # Derive a friendlier default output if caller used the placeholder path
-    try:
-        if str(output_csv).replace("\\", "/").endswith("outputs/merged_classified.csv") and input_csv:
-            ip = Path(input_csv)
-            suffix = ip.suffix or ".csv"
-            output_csv = str(ip.with_name(ip.stem + "_classyfire").with_suffix(suffix))
-    except Exception:
-        pass
+    output_csv_str = str(output_csv)
+    if output_csv_str.replace("\\", "/").endswith("outputs/merged_classified.csv") and input_csv:
+        ip = Path(input_csv)
+        suffix = ip.suffix or ".csv"
+        output_csv = str(ip.with_name(ip.stem + "_classyfire").with_suffix(suffix))
     df = pd.read_csv(input_csv)
     if "annotation_level" not in df.columns or "INCHIKEY" not in df.columns:
         cols = ", ".join(df.columns)
@@ -209,10 +193,7 @@ def classify_level12_with_classyfire(
             hit += 1
             processed += 1
             if progress:
-                try:
-                    progress(processed, total, ik, True, "cache")
-                except Exception:
-                    pass
+                progress(processed, total, ik, True, "cache")
     to_query = [ik for ik in keys if ik not in results]
 
     # Only attempt network calls for missing keys
@@ -221,8 +202,8 @@ def classify_level12_with_classyfire(
         skipped = len(to_query)
     else:
         skipped = 0
-        for i, ik in enumerate(to_query, 1):
-            data = _fetch_classyfire(ik, base_url=base_url, timeout=timeout, retries=retries, backoff=backoff)
+        for ik in to_query:
+            data = _fetch_classyfire(ik, base_url=base_url, timeout=timeout)
             if data is not None:
                 tax = _extract_taxonomy(data)
                 results[ik] = tax
@@ -242,10 +223,7 @@ def classify_level12_with_classyfire(
                 status = "miss"
             processed += 1
             if progress:
-                try:
-                    progress(processed, total, ik, False, status)
-                except Exception:
-                    pass
+                progress(processed, total, ik, False, status)
             time.sleep(max(0.0, sleep_sec))
 
     # Persist updated cache
@@ -260,11 +238,7 @@ def classify_level12_with_classyfire(
     if results_only:
         # Write only identifier + classification columns
         if id_column not in out.columns:
-            # Fallback: try Alignment ID; otherwise error
-            if "Alignment ID" in out.columns:
-                out[id_column] = out["Alignment ID"]
-            else:
-                raise ValueError(f"Identifier column '{id_column}' not found in input CSV")
+            out[id_column] = out["Alignment ID"]
         minimal_cols = [id_column] + cf_cols
         out[minimal_cols].drop_duplicates(subset=[id_column]).to_csv(output_csv, index=False)
         return {"unique_keys": len(keys), "hits": hit, "miss": miss, "rows": int(out.shape[0]), "added_cols": len(cf_cols), "skipped_offline": skipped}

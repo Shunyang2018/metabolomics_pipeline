@@ -65,6 +65,7 @@ def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 
 
 def write_ms_files(pos_entries: List[str], neg_entries: List[str], out_dir: Path) -> Tuple[int, int]:
+    """Write POS/NEG .ms files and return the counts of entries written."""
     out_dir.mkdir(parents=True, exist_ok=True)
     pos_path = out_dir / "sirius_unknown_pos.ms"
     neg_path = out_dir / "sirius_unknown_neg.ms"

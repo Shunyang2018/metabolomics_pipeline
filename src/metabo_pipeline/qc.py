@@ -6,6 +6,7 @@ from typing import Dict, List, Tuple
 
 
 def count_msms_ions(msms: str) -> int:
+    """Count nonzero fragment ions encoded in an MS/MS spectrum cell."""
     if not isinstance(msms, str):
         return 0
     s = msms.strip().lower()
@@ -15,16 +16,14 @@ def count_msms_ions(msms: str) -> int:
     for tok in s.split():
         if ":" not in tok:
             continue
-        try:
-            inten = float(tok.split(":", 1)[1])
-        except Exception:
-            continue
+        inten = float(tok.split(":", 1)[1])
         if inten > 0:
             cnt += 1
     return cnt
 
 
 def build_group_cols(sample_cols: List[str]) -> Dict[str, List[str]]:
+    """Group replicate sample columns by their normalized identifier."""
     import re
 
     group_cols: Dict[str, List[str]] = {}
@@ -43,6 +42,7 @@ def build_group_cols(sample_cols: List[str]) -> Dict[str, List[str]]:
 
 
 def compute_group_metrics(df: pd.DataFrame, group_cols: Dict[str, List[str]], blank_col: str | None) -> pd.DataFrame:
+    """Compute blank fold, presence, and CV metrics per replicate group."""
     df = df.copy()
 
     # Gather blank columns (explicit 'blank' plus any column whose token equals 'blank').
@@ -101,6 +101,7 @@ def pass_any_mask(
     present_min: float,
     cv_max: float | None,
 ) -> pd.Series:
+    """Determine whether each row passes any replicate-group QC criteria."""
     passes = []
     for grp in group_cols.keys():
         bf = df.get(f"blank_fold_{grp}")

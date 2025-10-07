@@ -2,25 +2,20 @@ from __future__ import annotations
 
 import pandas as pd
 
+def _to_float(val):
+    """Coerce a value to float."""
+    return float(val)
 
 def assign_annotation_level_row(row: pd.Series) -> str:
+    """Infer an annotation level for a single MS-DIAL row."""
     name = str(row.get("Metabolite name", "")).strip()
     lname = name.lower()
     if (not name) or lname.startswith("unknown") or lname.startswith("low score") or lname.startswith("no ms2"):
         return "3"
 
-    def _to_float(val):
-        try:
-            return float(val)
-        except Exception:
-            return float("nan")
-
-    wdot = _to_float(row.get("Weighted dot product"))
-    rdot = _to_float(row.get("Reverse dot product"))
-    try:
-        mcount = int(round(float(row.get("Matched peaks count", float("nan")))))
-    except Exception:
-        mcount = -1
+    wdot = _to_float(row["Weighted dot product"])
+    rdot = _to_float(row["Reverse dot product"])
+    mcount = int(round(float(row["Matched peaks count"])))
 
     # Weak or missing weighted score → Level 3
     if not pd.notna(wdot) or wdot < 0.5:
@@ -39,6 +34,7 @@ def assign_annotation_level_row(row: pd.Series) -> str:
 
 
 def annotate_levels(df: pd.DataFrame) -> pd.DataFrame:
+    """Annotate an entire dataframe with MS-DIAL level calls."""
     df = df.copy()
     df["annotation_level"] = df.apply(assign_annotation_level_row, axis=1)
     return df

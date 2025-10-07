@@ -8,31 +8,26 @@ import pandas as pd
 
 
 def _read_text(path: Path) -> str:
-    try:
-        return path.read_text(encoding="utf-8", errors="ignore")
-    except Exception:
-        return ""
+    """Return file contents as UTF-8 text."""
+    return path.read_text(encoding="utf-8", errors="ignore")
 
 
 def _parse_feature_id_from_spectrum(spectrum_ms: Path) -> Optional[int]:
+    """Extract a feature_id integer from a SIRIUS spectrum file."""
     txt = _read_text(spectrum_ms)
     fid: Optional[int] = None
     for line in txt.splitlines():
         if line.startswith("#feature_id "):
-            try:
-                return int(line.split()[1])
-            except Exception:
-                continue
+            return int(line.split()[1])
         if line.startswith(">compound "):
             tok = line.split(maxsplit=1)[1].strip()
-            try:
+            if tok.isdigit():
                 fid = int(tok)
-            except Exception:
-                pass
     return fid
 
 
 def _parse_info_from_compound(compound_info: Path) -> Dict[str, Optional[str]]:
+    """Parse ion metadata from a compound.info file."""
     out: Dict[str, Optional[str]] = {"ionType": None, "ionMass": None}
     txt = _read_text(compound_info)
     for line in txt.splitlines():
@@ -47,65 +42,61 @@ def _parse_info_from_compound(compound_info: Path) -> Dict[str, Optional[str]]:
 
 
 def _extract_canopus(comp_dir: Path) -> Dict[str, Optional[str]]:
+    """Gather CANOPUS class annotations if present in a compound directory."""
     out = {"SIRIUS_canopus_superclass": None, "SIRIUS_canopus_class": None, "SIRIUS_canopus_most_specific": None}
     can_dir = comp_dir / "canopus"
     if not can_dir.exists():
         return out
     # Heuristic: find a TSV under canopus with class columns
     for tsv in can_dir.glob("*.tsv"):
-        try:
-            with tsv.open("r", encoding="utf-8", errors="ignore") as f:
-                header = f.readline().strip().split("\t")
-                line = f.readline().strip().split("\t") if not f.closed else []
-            if not header or not line:
-                continue
-            def _get(colname_substr: str) -> Optional[str]:
-                for i, h in enumerate(header):
-                    if colname_substr.lower() in h.lower():
-                        return line[i] if i < len(line) else None
-                return None
-            out["SIRIUS_canopus_superclass"] = _get("superclass")
-            out["SIRIUS_canopus_class"] = _get("class")
-            out["SIRIUS_canopus_most_specific"] = _get("most") or _get("specific")
-            # If at least one field found, stop
-            if any(out.values()):
-                return out
-        except Exception:
+        with tsv.open("r", encoding="utf-8", errors="ignore") as f:
+            header = f.readline().strip().split("\t")
+            line = f.readline().strip().split("\t") if not f.closed else []
+        if not header or not line:
             continue
+        def _get(colname_substr: str) -> Optional[str]:
+            for i, h in enumerate(header):
+                if colname_substr.lower() in h.lower():
+                    return line[i] if i < len(line) else None
+            return None
+        out["SIRIUS_canopus_superclass"] = _get("superclass")
+        out["SIRIUS_canopus_class"] = _get("class")
+        out["SIRIUS_canopus_most_specific"] = _get("most") or _get("specific")
+        # If at least one field found, stop
+        if any(out.values()):
+            return out
     return out
 
 
 def _pick_top_fingerid(fingerid_dir: Path) -> Optional[Dict[str, Optional[str]]]:
+    """Select the top-ranked CSI:FingerID hit from a result directory."""
     if not fingerid_dir.exists():
         return None
     best: Optional[Dict[str, Optional[str]]] = None
     best_score: Optional[float] = None
     for tsv in fingerid_dir.glob("*.tsv"):
-        try:
-            # Read minimally to avoid heavy memory use
-            with tsv.open("r", encoding="utf-8", newline="") as f:
-                rdr = csv.DictReader(f, delimiter="\t")
-                row = next(rdr, None)
-                if not row:
-                    continue
-                score_str = row.get("score")
-                score = float(score_str) if score_str not in (None, "") else None
-                if score is None:
-                    continue
-                if best_score is None or score > best_score:
-                    best_score = score
-                    best = {
-                        "inchikey2D": row.get("inchikey2D"),
-                        "name": row.get("name"),
-                        "smiles": row.get("smiles"),
-                        "xlogp": row.get("xlogp"),
-                        "tanimotoSimilarity": row.get("tanimotoSimilarity"),
-                        "rank": row.get("rank"),
-                        "score": row.get("score"),
-                        "molecularFormula": row.get("molecularFormula"),
-                    }
-        except Exception:
-            continue
+        # Read minimally to avoid heavy memory use
+        with tsv.open("r", encoding="utf-8", newline="") as f:
+            rdr = csv.DictReader(f, delimiter="\t")
+            row = next(rdr, None)
+            if not row:
+                continue
+            score_str = row.get("score")
+            score = float(score_str) if score_str not in (None, "") else None
+            if score is None:
+                continue
+            if best_score is None or score > best_score:
+                best_score = score
+                best = {
+                    "inchikey2D": row.get("inchikey2D"),
+                    "name": row.get("name"),
+                    "smiles": row.get("smiles"),
+                    "xlogp": row.get("xlogp"),
+                    "tanimotoSimilarity": row.get("tanimotoSimilarity"),
+                    "rank": row.get("rank"),
+                    "score": row.get("score"),
+                    "molecularFormula": row.get("molecularFormula"),
+                }
     return best
 
 
@@ -118,11 +109,14 @@ def collect_sirius_results(
     extract_cache: Optional[Path] = None,
     force_rescan: bool = False,
 ) -> Dict[str, int]:
+    """Aggregate SIRIUS identifications and optionally join them onto the merged table."""
     rows: List[Dict[str, Optional[str]]] = []
     processed = 0
     ann_counts: Optional[Dict[str, int]] = None
 
     def _scan(root: Path, pol: str, total: int) -> Tuple[int, int]:
+        """Iterate over SIRIUS compound folders for a given polarity."""
+        nonlocal processed
         n_found = n_kept = 0
         if not root or not root.exists():
             return n_found, n_kept
@@ -140,13 +134,8 @@ def collect_sirius_results(
                 # Capture formula-only / CANOPUS-only evidence to enable L4 assignment
                 cano = _extract_canopus(comp_dir)
                 has_canopus = any(v for v in cano.values())
-                has_formula = False
-                try:
-                    scores_dir = comp_dir / "scores"
-                    if scores_dir.exists() and any(scores_dir.glob("*.info")):
-                        has_formula = True
-                except Exception:
-                    has_formula = False
+                scores_dir = comp_dir / "scores"
+                has_formula = scores_dir.exists() and any(scores_dir.glob("*.info"))
                 rows.append(
                     {
                         "feature_id": fid,
@@ -163,10 +152,7 @@ def collect_sirius_results(
                 nonlocal processed
                 processed += 1
                 if progress:
-                    try:
-                        progress(processed, total, str(comp_dir))
-                    except Exception:
-                        pass
+                    progress(processed, total, str(comp_dir))
                 continue
             n_kept += 1
             cano = _extract_canopus(comp_dir)
@@ -190,10 +176,7 @@ def collect_sirius_results(
             )
             processed += 1
             if progress:
-                try:
-                    progress(processed, total, str(comp_dir))
-                except Exception:
-                    pass
+                progress(processed, total, str(comp_dir))
         return n_found, n_kept
 
     pf = pk = nf = nk = 0
@@ -205,13 +188,8 @@ def collect_sirius_results(
 
     # Load cached extraction if available and not forcing rescan
     df: pd.DataFrame
-    used_cache = False
     if extract_cache and (not force_rescan) and extract_cache.exists():
-        try:
-            df = pd.read_csv(extract_cache)
-            used_cache = True
-        except Exception:
-            df = pd.DataFrame()
+        df = pd.read_csv(extract_cache)
     else:
         # Perform scan
         if pos_dir:
@@ -223,11 +201,8 @@ def collect_sirius_results(
         df = pd.DataFrame(rows)
         # Persist extraction cache for future runs
         if extract_cache:
-            try:
-                extract_cache.parent.mkdir(parents=True, exist_ok=True)
-                df.to_csv(extract_cache, index=False)
-            except Exception:
-                pass
+            extract_cache.parent.mkdir(parents=True, exist_ok=True)
+            df.to_csv(extract_cache, index=False)
 
     # Normalize columns from existing identifications (compat with historical headers)
     if not df.empty:
@@ -304,11 +279,8 @@ def collect_sirius_results(
                 # Everything else without structure (including formula-only) becomes L5
                 out.loc[tgt & ~struct_mask & ~canopus_mask, lvl_col] = "5"
                 # Compute post-merge annotation level counts
-                try:
-                    vc = out[lvl_col].astype(str).value_counts()
-                    ann_counts = {k: int(vc.get(k, 0)) for k in ["1","2","3","4","5"]}
-                except Exception:
-                    ann_counts = None
+                vc = out[lvl_col].astype(str).value_counts()
+                ann_counts = {k: int(vc.get(k, 0)) for k in ["1","2","3","4","5"]}
             # Drop helper columns
             out = out.drop(columns=[c for c in ("sirius_name","_sirius_has_struct","_sirius_has_formula","_sirius_has_canopus","_polarity") if c in out.columns], errors="ignore")
             out.to_csv(output_csv, index=False)
@@ -330,15 +302,12 @@ def collect_sirius_results(
                 pol_col = cand
                 break
         if pol_col is not None:
-            try:
-                pos_id = int((df[pol_col].astype(str) == "POS").sum())
-                neg_id = int((df[pol_col].astype(str) == "NEG").sum())
-                pf = pk = pos_id
-                nf = nk = neg_id
-                miss_pos = 0
-                miss_neg = 0
-            except Exception:
-                pass
+            pos_id = int((df[pol_col].astype(str) == "POS").sum())
+            neg_id = int((df[pol_col].astype(str) == "NEG").sum())
+            pf = pk = pos_id
+            nf = nk = neg_id
+            miss_pos = 0
+            miss_neg = 0
     return {
         "pos_compounds": pf,
         "pos_identified": pk,
