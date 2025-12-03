@@ -9,6 +9,7 @@ from typing import Callable, Dict, Optional
 import pandas as pd
 import requests
 
+
 def _fetch_classyfire(
     inchikey: str,
     base_url: str = "http://classyfire.wishartlab.com",
@@ -16,28 +17,19 @@ def _fetch_classyfire(
 ) -> Optional[Dict]:
     """Fetch classification for an InChIKey from ClassyFire.
 
-    Tries common endpoints; returns parsed JSON dict or None.
+    Uses the primary /entities/ endpoint. Returns parsed JSON dict or None.
     """
     inchikey = (inchikey or "").strip()
     if not inchikey:
         return None
-    # Try entity endpoint
-    urls = [
-        f"{base_url}/entities/{inchikey}.json",
-        f"{base_url}/entities/{inchikey}",
-        f"{base_url}/classification?inchikey={inchikey}",
-    ]
-    for url in urls:
-        try:
-            r = requests.get(url, timeout=timeout)
-            if r.status_code == 200:
-                return r.json()
-            if r.status_code in (429, 500, 502, 503, 504):
-                # transient; try next url
-                continue
-        except requests.RequestException:
-            # network error; try next url
-            continue
+
+    url = f"{base_url}/entities/{inchikey}.json"
+    try:
+        r = requests.get(url, timeout=timeout)
+        if r.status_code == 200:
+            return r.json()
+    except requests.RequestException:
+        pass
     return None
 
 
@@ -106,7 +98,9 @@ def _load_cache(path: Optional[str]) -> Dict[str, Dict[str, Optional[str]]]:
     return out
 
 
-def _save_cache(path: Optional[str], cache: Dict[str, Dict[str, Optional[str]]]) -> None:
+def _save_cache(
+    path: Optional[str], cache: Dict[str, Dict[str, Optional[str]]]
+) -> None:
     """Persist taxonomy cache data to a JSON file."""
     if not path:
         return
@@ -123,31 +117,34 @@ def _save_cache(path: Optional[str], cache: Dict[str, Dict[str, Optional[str]]])
 def probe_classyfire(base_url: str, timeout: float = 10.0) -> Dict[str, object]:
     """Probe a ClassyFire-compatible API for availability and latency.
 
-    Tries both entity and classification endpoints with a known InChIKey.
-    Returns a dict with statuses and timings.
+    Tests the primary /entities/ endpoint with a known InChIKey.
+    Returns a dict with status and timing.
     """
     key = "BSYNRYMUTXBXSQ-UHFFFAOYSA-N"  # acetaminophen (paracetamol)
-    urls = [
-        f"{base_url.rstrip('/')}/entities/{key}.json",
-        f"{base_url.rstrip('/')}/classification?inchikey={key}",
-    ]
-    out: Dict[str, object] = {"base_url": base_url, "ok": True, "checks": []}
-    for u in urls:
-        rec: Dict[str, object] = {"url": u, "ok": False, "ms": None, "status": None, "error": None}
-        try:
-            t0 = perf_counter()
-            r = requests.get(u, timeout=timeout)
-            dt = int((perf_counter() - t0) * 1000)
-            rec["ms"] = dt
-            rec["status"] = r.status_code
-            if r.status_code == 200:
-                rec["ok"] = True
-            else:
-                out["ok"] = False
-        except requests.RequestException as exc:
-            rec["error"] = str(exc)
-            out["ok"] = False
-        out["checks"].append(rec)
+    url = f"{base_url.rstrip('/')}/entities/{key}.json"
+
+    out: Dict[str, object] = {"base_url": base_url, "ok": False, "checks": []}
+    rec: Dict[str, object] = {
+        "url": url,
+        "ok": False,
+        "ms": None,
+        "status": None,
+        "error": None,
+    }
+
+    try:
+        t0 = perf_counter()
+        r = requests.get(url, timeout=timeout)
+        dt = int((perf_counter() - t0) * 1000)
+        rec["ms"] = dt
+        rec["status"] = r.status_code
+        if r.status_code == 200:
+            rec["ok"] = True
+            out["ok"] = True
+    except requests.RequestException as exc:
+        rec["error"] = str(exc)
+
+    out["checks"].append(rec)
     return out
 
 
@@ -158,7 +155,7 @@ def classify_level12_with_classyfire(
     base_url: str = "http://classyfire.wishartlab.com",
     results_only: bool = False,
     id_column: str = "feature_id",
-    cache_path: Optional[str] = "outputs/classyfire_cache.json",
+    cache_path: Optional[str] = None,
     progress: Optional[Callable[[int, int, str, bool, str], None]] = None,
     offline: bool = False,
     timeout: float = 15.0,
@@ -166,20 +163,32 @@ def classify_level12_with_classyfire(
     """Classify Level 1/2 rows via ClassyFire using unique InChIKeys and merge back.
 
     Returns a summary dict with counts.
+    Cache defaults to package directory/classyfire_cache.json if not specified.
     """
+    # Default cache path to package directory if not provided
+    if cache_path is None:
+        package_dir = Path(__file__).parent
+        cache_path = str(package_dir / "classyfire_cache.json")
     # Derive a friendlier default output if caller used the placeholder path
     output_csv_str = str(output_csv)
-    if output_csv_str.replace("\\", "/").endswith("outputs/merged_classified.csv") and input_csv:
+    if (
+        output_csv_str.replace("\\", "/").endswith("outputs/merged_classified.csv")
+        and input_csv
+    ):
         ip = Path(input_csv)
         suffix = ip.suffix or ".csv"
         output_csv = str(ip.with_name(ip.stem + "_classyfire").with_suffix(suffix))
     df = pd.read_csv(input_csv)
     if "annotation_level" not in df.columns or "INCHIKEY" not in df.columns:
         cols = ", ".join(df.columns)
-        raise ValueError("Input CSV must contain 'annotation_level' and 'INCHIKEY' columns. "
-                         f"Found columns: {cols}")
+        raise ValueError(
+            "Input CSV must contain 'annotation_level' and 'INCHIKEY' columns. "
+            f"Found columns: {cols}"
+        )
 
-    mask = df["annotation_level"].astype(str).isin(["1", "2"]) & df["INCHIKEY"].astype(str).str.len().gt(0)
+    mask = df["annotation_level"].astype(str).isin(["1", "2"]) & df["INCHIKEY"].astype(
+        str
+    ).str.len().gt(0)
     keys = sorted(set(df.loc[mask, "INCHIKEY"].astype(str)))
     # Load cache and prepare results with cached hits
     cache = _load_cache(cache_path)
@@ -230,18 +239,41 @@ def classify_level12_with_classyfire(
     _save_cache(cache_path, cache)
 
     # Merge back
-    tax_df = pd.DataFrame.from_dict(results, orient="index").reset_index().rename(columns={"index": "INCHIKEY"})
+    tax_df = (
+        pd.DataFrame.from_dict(results, orient="index")
+        .reset_index()
+        .rename(columns={"index": "INCHIKEY"})
+    )
     out = df.merge(tax_df, on="INCHIKEY", how="left")
 
-    cf_cols = [c for c in ["cf_kingdom", "cf_superclass", "cf_class", "cf_subclass", "cf_direct_parent"] if c in out.columns]
+    cf_cols = [
+        c
+        for c in [
+            "cf_kingdom",
+            "cf_superclass",
+            "cf_class",
+            "cf_subclass",
+            "cf_direct_parent",
+        ]
+        if c in out.columns
+    ]
 
     if results_only:
         # Write only identifier + classification columns
         if id_column not in out.columns:
             out[id_column] = out["Alignment ID"]
         minimal_cols = [id_column] + cf_cols
-        out[minimal_cols].drop_duplicates(subset=[id_column]).to_csv(output_csv, index=False)
-        return {"unique_keys": len(keys), "hits": hit, "miss": miss, "rows": int(out.shape[0]), "added_cols": len(cf_cols), "skipped_offline": skipped}
+        out[minimal_cols].drop_duplicates(subset=[id_column]).to_csv(
+            output_csv, index=False
+        )
+        return {
+            "unique_keys": len(keys),
+            "hits": hit,
+            "miss": miss,
+            "rows": int(out.shape[0]),
+            "added_cols": len(cf_cols),
+            "skipped_offline": skipped,
+        }
     else:
         # Reorder: insert cf_* columns immediately after 'SMILES' if present,
         # otherwise after 'Metabolite name' if present.
@@ -261,4 +293,11 @@ def classify_level12_with_classyfire(
                 out = out.reindex(columns=new_cols)
 
         out.to_csv(output_csv, index=False)
-        return {"unique_keys": len(keys), "hits": hit, "miss": miss, "rows": int(out.shape[0]), "added_cols": len(cf_cols), "skipped_offline": skipped}
+        return {
+            "unique_keys": len(keys),
+            "hits": hit,
+            "miss": miss,
+            "rows": int(out.shape[0]),
+            "added_cols": len(cf_cols),
+            "skipped_offline": skipped,
+        }

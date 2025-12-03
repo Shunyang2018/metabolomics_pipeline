@@ -1,11 +1,14 @@
 from __future__ import annotations
 
-import numpy as np
-import pandas as pd
 from typing import List, Tuple
 
+import numpy as np
+import pandas as pd
 
-def l3_representatives(df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float) -> pd.DataFrame:
+
+def l3_representatives(
+    df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float
+) -> pd.DataFrame:
     """Return representative L3 rows using global clustering within (chrom, polarity).
 
     - Window: |ΔRT| <= rt_window_min; |Δm/z| <= mz_ppm (ppm) relative to cluster representative
@@ -16,10 +19,14 @@ def l3_representatives(df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float)
 
     work = df_l3.copy()
     if "mode" not in work.columns:
-        raise ValueError("Expected 'mode' column in L3 dataframe; ensure merge step inferred polarity from filename.")
+        raise ValueError(
+            "Expected 'mode' column in L3 dataframe; ensure merge step inferred polarity from filename."
+        )
     # Polarity derives from filename-inferred mode (POS/NEG/UNK)
     work["_polarity"] = work["mode"].astype(str).str.upper()
-    work["_polarity"] = work["_polarity"].where(work["_polarity"].isin({"POS", "NEG"}), "UNK")
+    work["_polarity"] = work["_polarity"].where(
+        work["_polarity"].isin({"POS", "NEG"}), "UNK"
+    )
     work["_rt"] = pd.to_numeric(work.get("Average Rt(min)"), errors="coerce")
     work["_mz"] = pd.to_numeric(work.get("Average Mz"), errors="coerce")
     work["_sn"] = pd.to_numeric(work.get("S/N average"), errors="coerce")
@@ -37,7 +44,8 @@ def l3_representatives(df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float)
         last_rt = np.nan
         last_mz = np.nan
         for idx, row in g.iterrows():
-            rt = row["_rt"]; mz = row["_mz"]
+            rt = row["_rt"]
+            mz = row["_mz"]
             sn = row["_sn"] if pd.notna(row["_sn"]) else -1.0
             wd = row["_wd"] if pd.notna(row["_wd"]) else -1.0
             if cluster_rep is None:
@@ -46,8 +54,11 @@ def l3_representatives(df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float)
                 continue
             _, rep_rt, rep_mz, rep_sn, rep_wd = cluster_rep
             mz_tol = (mz_ppm * 1e-6) * last_mz if pd.notna(last_mz) else np.nan
-            if (pd.notna(rt) and pd.notna(last_rt) and abs(rt - last_rt) <= rt_window_min) and \
-               (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
+            if (
+                pd.notna(rt)
+                and pd.notna(last_rt)
+                and abs(rt - last_rt) <= rt_window_min
+            ) and (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
                 if (sn, wd) > (rep_sn, rep_wd):
                     cluster_rep = (idx, rt, mz, sn, wd)
                 # extend cluster
@@ -65,7 +76,9 @@ def l3_representatives(df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float)
     return reps
 
 
-def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_ppm: float) -> pd.DataFrame:
+def dedup_name_conflicts_by_cluster(
+    df: pd.DataFrame, rt_window_min: float, mz_ppm: float
+) -> pd.DataFrame:
     """DEPRECATED: retained for historical reference; no longer used by the pipeline.
 
     Within RT/m/z clusters (per chrom, polarity), keep one row per Metabolite name
@@ -77,10 +90,14 @@ def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_p
 
     work = df.copy()
     if "mode" not in work.columns:
-        raise ValueError("Expected 'mode' column in dataframe; ensure merge step inferred polarity from filename.")
+        raise ValueError(
+            "Expected 'mode' column in dataframe; ensure merge step inferred polarity from filename."
+        )
     # Same polarity tagging as in the representative selection above
     work["_polarity"] = work["mode"].astype(str).str.upper()
-    work["_polarity"] = work["_polarity"].where(work["_polarity"].isin({"POS", "NEG"}), "UNK")
+    work["_polarity"] = work["_polarity"].where(
+        work["_polarity"].isin({"POS", "NEG"}), "UNK"
+    )
     work["_rt"] = pd.to_numeric(work.get("Average Rt(min)"), errors="coerce")
     work["_mz"] = pd.to_numeric(work.get("Average Mz"), errors="coerce")
     work["_sn"] = pd.to_numeric(work.get("S/N average"), errors="coerce")
@@ -104,15 +121,19 @@ def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_p
         last_rt = np.nan
         last_mz = np.nan
         for idx, row in g.iterrows():
-            rt = row["_rt"]; mz = row["_mz"]
+            rt = row["_rt"]
+            mz = row["_mz"]
             if isinstance(last_rt, float) and np.isnan(last_rt):
                 # start cluster
                 cluster_members = [idx]
                 last_rt, last_mz = rt, mz
                 continue
             mz_tol = (mz_ppm * 1e-6) * last_mz if pd.notna(last_mz) else np.nan
-            if (pd.notna(rt) and pd.notna(last_rt) and abs(rt - last_rt) <= rt_window_min) and \
-               (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
+            if (
+                pd.notna(rt)
+                and pd.notna(last_rt)
+                and abs(rt - last_rt) <= rt_window_min
+            ) and (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
                 cluster_members.append(idx)
             else:
                 # finalize previous cluster: pick one per Metabolite name
@@ -120,7 +141,9 @@ def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_p
                 for name, subg in sub.groupby("Metabolite name", dropna=False):
                     subg = subg.copy()
                     subg["_cv_sort"] = subg["_cv_med"].fillna(np.inf)
-                    subg = subg.sort_values(["_cv_sort", "_sn", "_wd"], ascending=[True, False, False])
+                    subg = subg.sort_values(
+                        ["_cv_sort", "_sn", "_wd"], ascending=[True, False, False]
+                    )
                     picked_idx.append(subg.index[0])
                 # start new cluster
                 cluster_members = [idx]
@@ -131,10 +154,15 @@ def dedup_name_conflicts_by_cluster(df: pd.DataFrame, rt_window_min: float, mz_p
             for name, subg in sub.groupby("Metabolite name", dropna=False):
                 subg = subg.copy()
                 subg["_cv_sort"] = subg["_cv_med"].fillna(np.inf)
-                subg = subg.sort_values(["_cv_sort", "_sn", "_wd"], ascending=[True, False, False])
+                subg = subg.sort_values(
+                    ["_cv_sort", "_sn", "_wd"], ascending=[True, False, False]
+                )
                 picked_idx.append(subg.index[0])
 
     reps = work.loc[sorted(set(picked_idx))]
     # Clean helpers
-    reps = reps.drop(columns=["_polarity", "_rt", "_mz", "_sn", "_wd", "_cv_med", "_cv_sort"], errors="ignore")
+    reps = reps.drop(
+        columns=["_polarity", "_rt", "_mz", "_sn", "_wd", "_cv_med", "_cv_sort"],
+        errors="ignore",
+    )
     return reps

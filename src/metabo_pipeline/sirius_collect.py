@@ -6,10 +6,183 @@ from typing import Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+from . import constants
+
 
 def _read_text(path: Path) -> str:
     """Return file contents as UTF-8 text."""
     return path.read_text(encoding="utf-8", errors="ignore")
+
+
+def _detect_sirius_format(sirius_path: Path) -> str:
+    """
+    Detect if SIRIUS output is V5 (directories) or V6 (TSV summaries).
+
+    Returns: "v5" or "v6" or "unknown"
+    """
+    if not sirius_path or not sirius_path.exists():
+        return "unknown"
+
+    # Check for V6 TSV files first (SIRIUS 6 is current)
+    struct_file = sirius_path / "structure_identifications.tsv"
+    if struct_file.exists():
+        return "v6"
+
+    # Check for V5 compound directories (numbered folders)
+    subdirs = [p for p in sirius_path.iterdir() if p.is_dir()]
+    if subdirs and any(
+        (p / "spectrum.ms").exists() for p in subdirs[:10]
+    ):  # Check first 10
+        return "v5"
+
+    return "unknown"
+
+
+def _extract_feature_id_from_v6_mapping(mapping_feature_id: str) -> Optional[int]:
+    """
+    Extract numeric feature ID from SIRIUS 6 mappingFeatureId.
+
+    Format: "764016017587228397_sirius_unknown_neg_Unknown_8468"
+    The feature_id is appended to the compound name during .ms export,
+    so it appears as the last numeric segment.
+
+    Returns: the feature_id from the compound name suffix
+    """
+    if not mapping_feature_id or not isinstance(mapping_feature_id, str):
+        return None
+
+    # Split by underscore and find the last numeric part
+    # Format: <SIRIUS_ID>_sirius_<input_name>_<chromatography>_<compound_name>_<feature_id>
+    parts = str(mapping_feature_id).split("_")
+
+    # Scan from the end to find a numeric part (feature_id)
+    for part in reversed(parts):
+        if part.isdigit():
+            try:
+                return int(part)
+            except (ValueError, OverflowError):
+                pass
+
+    return None
+
+
+def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
+    """
+    Parse SIRIUS 6 TSV summary files.
+
+    Args:
+        sirius_dir: Directory containing SIRIUS 6 TSV output files
+        polarity: "POS" or "NEG"
+
+    Returns:
+        List of dicts with structure and CANOPUS data
+    """
+    results = []
+
+    # Key files
+    struct_file = sirius_dir / "structure_identifications.tsv"
+    canopus_file = sirius_dir / "canopus_structure_summary.tsv"
+
+    if not struct_file.exists():
+        return results
+
+    # Read structure identifications (top hit per compound)
+    try:
+        struct_df = pd.read_csv(struct_file, sep="\t", low_memory=False)
+    except Exception as e:
+        print(f"Warning: Failed to read {struct_file}: {e}")
+        return results
+
+    # Filter to rank 1 only (top hits)
+    if "structurePerIdRank" in struct_df.columns:
+        struct_df = struct_df[struct_df["structurePerIdRank"] == 1].copy()
+
+    # Read CANOPUS if available
+    canopus_df = None
+    if canopus_file.exists():
+        try:
+            canopus_df = pd.read_csv(canopus_file, sep="\t", low_memory=False)
+            if "formulaRank" in canopus_df.columns:
+                canopus_df = canopus_df[canopus_df["formulaRank"] == 1].copy()
+        except Exception as e:
+            print(f"Warning: Failed to read {canopus_file}: {e}")
+            canopus_df = None
+
+    # Merge on mappingFeatureId
+    if (
+        canopus_df is not None
+        and "mappingFeatureId" in struct_df.columns
+        and "mappingFeatureId" in canopus_df.columns
+    ):
+        merged = struct_df.merge(
+            canopus_df[
+                [
+                    "mappingFeatureId",
+                    "ClassyFire#most specific class",
+                    "ClassyFire#superclass",
+                    "ClassyFire#class",
+                ]
+            ],
+            on="mappingFeatureId",
+            how="left",
+        )
+    else:
+        merged = struct_df.copy()
+
+    # Convert to result format
+    for _, row in merged.iterrows():
+        # Extract feature_id from mappingFeatureId (contains compound name with _<feature_id> suffix)
+        fid = _extract_feature_id_from_v6_mapping(row.get("mappingFeatureId"))
+
+        if fid is None:
+            # Fallback: try alignedFeatureId (SIRIUS internal ID, unlikely to match our feature_ids)
+            if "alignedFeatureId" in row and pd.notna(row.get("alignedFeatureId")):
+                try:
+                    fid = int(row["alignedFeatureId"])
+                except (ValueError, TypeError):
+                    pass
+
+        if fid is None:
+            continue
+
+        has_struct = bool(pd.notna(row.get("smiles"))) and bool(
+            pd.notna(row.get("InChIkey2D"))
+        )
+        has_formula = bool(pd.notna(row.get("molecularFormula")))
+
+        # Extract CANOPUS classifications
+        canopus_super = (
+            row.get("ClassyFire#superclass")
+            if pd.notna(row.get("ClassyFire#superclass"))
+            else None
+        )
+        canopus_class = (
+            row.get("ClassyFire#class")
+            if pd.notna(row.get("ClassyFire#class"))
+            else None
+        )
+        canopus_specific = (
+            row.get("ClassyFire#most specific class")
+            if pd.notna(row.get("ClassyFire#most specific class"))
+            else None
+        )
+        has_canopus = any([canopus_super, canopus_class, canopus_specific])
+
+        results.append(
+            {
+                "feature_id": fid,
+                "sirius_name": row.get("name") if pd.notna(row.get("name")) else None,
+                "_polarity": polarity,
+                "_sirius_has_struct": has_struct,
+                "_sirius_has_formula": has_formula,
+                "_sirius_has_canopus": has_canopus,
+                "SIRIUS_canopus_superclass": canopus_super,
+                "SIRIUS_canopus_class": canopus_class,
+                "SIRIUS_canopus_most_specific": canopus_specific,
+            }
+        )
+
+    return results
 
 
 def _parse_feature_id_from_spectrum(spectrum_ms: Path) -> Optional[int]:
@@ -43,7 +216,11 @@ def _parse_info_from_compound(compound_info: Path) -> Dict[str, Optional[str]]:
 
 def _extract_canopus(comp_dir: Path) -> Dict[str, Optional[str]]:
     """Gather CANOPUS class annotations if present in a compound directory."""
-    out = {"SIRIUS_canopus_superclass": None, "SIRIUS_canopus_class": None, "SIRIUS_canopus_most_specific": None}
+    out = {
+        "SIRIUS_canopus_superclass": None,
+        "SIRIUS_canopus_class": None,
+        "SIRIUS_canopus_most_specific": None,
+    }
     can_dir = comp_dir / "canopus"
     if not can_dir.exists():
         return out
@@ -54,11 +231,13 @@ def _extract_canopus(comp_dir: Path) -> Dict[str, Optional[str]]:
             line = f.readline().strip().split("\t") if not f.closed else []
         if not header or not line:
             continue
+
         def _get(colname_substr: str) -> Optional[str]:
             for i, h in enumerate(header):
                 if colname_substr.lower() in h.lower():
                     return line[i] if i < len(line) else None
             return None
+
         out["SIRIUS_canopus_superclass"] = _get("superclass")
         out["SIRIUS_canopus_class"] = _get("class")
         out["SIRIUS_canopus_most_specific"] = _get("most") or _get("specific")
@@ -122,13 +301,11 @@ def collect_sirius_results(
             return n_found, n_kept
         for comp_dir in sorted(p for p in root.iterdir() if p.is_dir()):
             spectrum = comp_dir / "spectrum.ms"
-            compound_info = comp_dir / "compound.info"
             fingerid_dir = comp_dir / "fingerid"
             if not spectrum.exists():
                 continue
             n_found += 1
             fid = _parse_feature_id_from_spectrum(spectrum)
-            info = _parse_info_from_compound(compound_info) if compound_info.exists() else {}
             cand = _pick_top_fingerid(fingerid_dir)
             if not cand:
                 # Capture formula-only / CANOPUS-only evidence to enable L4 assignment
@@ -143,9 +320,13 @@ def collect_sirius_results(
                         "_sirius_has_struct": False,
                         "_sirius_has_formula": has_formula,
                         "_sirius_has_canopus": has_canopus,
-                        "SIRIUS_canopus_superclass": cano.get("SIRIUS_canopus_superclass"),
+                        "SIRIUS_canopus_superclass": cano.get(
+                            "SIRIUS_canopus_superclass"
+                        ),
                         "SIRIUS_canopus_class": cano.get("SIRIUS_canopus_class"),
-                        "SIRIUS_canopus_most_specific": cano.get("SIRIUS_canopus_most_specific"),
+                        "SIRIUS_canopus_most_specific": cano.get(
+                            "SIRIUS_canopus_most_specific"
+                        ),
                     }
                 )
                 # advance progress
@@ -171,7 +352,9 @@ def collect_sirius_results(
                     # keep only the requested CANOPUS class fields as new columns
                     "SIRIUS_canopus_superclass": cano.get("SIRIUS_canopus_superclass"),
                     "SIRIUS_canopus_class": cano.get("SIRIUS_canopus_class"),
-                    "SIRIUS_canopus_most_specific": cano.get("SIRIUS_canopus_most_specific"),
+                    "SIRIUS_canopus_most_specific": cano.get(
+                        "SIRIUS_canopus_most_specific"
+                    ),
                 }
             )
             processed += 1
@@ -181,9 +364,14 @@ def collect_sirius_results(
 
     pf = pk = nf = nk = 0
     total_dirs = 0
-    if pos_dir and pos_dir.exists():
+
+    # Use SIRIUS version from constants
+    sirius_version = constants.SIRIUS_VERSION.lower()
+
+    # Count directories for V5 format only (for progress tracking)
+    if pos_dir and pos_dir.exists() and sirius_version == "v5":
         total_dirs += sum(1 for _ in pos_dir.iterdir() if _.is_dir())
-    if neg_dir and neg_dir.exists():
+    if neg_dir and neg_dir.exists() and sirius_version == "v5":
         total_dirs += sum(1 for _ in neg_dir.iterdir() if _.is_dir())
 
     # Load cached extraction if available and not forcing rescan
@@ -191,13 +379,37 @@ def collect_sirius_results(
     if extract_cache and (not force_rescan) and extract_cache.exists():
         df = pd.read_csv(extract_cache)
     else:
-        # Perform scan
-        if pos_dir:
-            f, k = _scan(pos_dir, "POS", total_dirs)
-            pf, pk = f, k
-        if neg_dir:
-            f, k = _scan(neg_dir, "NEG", total_dirs)
-            nf, nk = f, k
+        # Perform scan based on configured SIRIUS version
+        if pos_dir and pos_dir.exists():
+            if sirius_version == "v6":
+                print("Using SIRIUS V6 parser for POS (configured in constants.py)")
+                v6_results = _parse_sirius6_tsv(pos_dir, "POS")
+                rows.extend(v6_results)
+                pf = pk = len(v6_results)  # All V6 results are "identified"
+            elif sirius_version == "v5":
+                print("Using SIRIUS V5 parser for POS (configured in constants.py)")
+                f, k = _scan(pos_dir, "POS", total_dirs)
+                pf, pk = f, k
+            else:
+                print(
+                    f"Warning: Unknown SIRIUS_VERSION '{constants.SIRIUS_VERSION}' in constants.py. Use 'v5' or 'v6'."
+                )
+
+        if neg_dir and neg_dir.exists():
+            if sirius_version == "v6":
+                print("Using SIRIUS V6 parser for NEG (configured in constants.py)")
+                v6_results = _parse_sirius6_tsv(neg_dir, "NEG")
+                rows.extend(v6_results)
+                nf = nk = len(v6_results)  # All V6 results are "identified"
+            elif sirius_version == "v5":
+                print("Using SIRIUS V5 parser for NEG (configured in constants.py)")
+                f, k = _scan(neg_dir, "NEG", total_dirs)
+                nf, nk = f, k
+            else:
+                print(
+                    f"Warning: Unknown SIRIUS_VERSION '{constants.SIRIUS_VERSION}' in constants.py. Use 'v5' or 'v6'."
+                )
+
         df = pd.DataFrame(rows)
         # Persist extraction cache for future runs
         if extract_cache:
@@ -221,21 +433,34 @@ def collect_sirius_results(
             ik_col = None
             for c in ("smiles", "SIRIUS_smiles"):
                 if c in df.columns:
-                    smiles_col = c; break
+                    smiles_col = c
+                    break
             for c in ("inchikey2D", "SIRIUS_inchikey2D"):
                 if c in df.columns:
-                    ik_col = c; break
+                    ik_col = c
+                    break
             if smiles_col and ik_col:
-                df["_sirius_has_struct"] = df[smiles_col].astype(str).str.len().gt(0) & df[ik_col].astype(str).str.len().gt(0)
+                df["_sirius_has_struct"] = df[smiles_col].astype(str).str.len().gt(
+                    0
+                ) & df[ik_col].astype(str).str.len().gt(0)
         if "_sirius_has_formula" not in df.columns:
             form_col = None
             for c in ("formula", "molecularFormula", "SIRIUS_formula"):
                 if c in df.columns:
-                    form_col = c; break
+                    form_col = c
+                    break
             if form_col:
                 df["_sirius_has_formula"] = df[form_col].astype(str).str.len().gt(0)
         if "_sirius_has_canopus" not in df.columns:
-            can_cols = [c for c in ("SIRIUS_canopus_superclass","SIRIUS_canopus_class","SIRIUS_canopus_most_specific") if c in df.columns]
+            can_cols = [
+                c
+                for c in (
+                    "SIRIUS_canopus_superclass",
+                    "SIRIUS_canopus_class",
+                    "SIRIUS_canopus_most_specific",
+                )
+                if c in df.columns
+            ]
             if can_cols:
                 mask = None
                 for c in can_cols:
@@ -264,14 +489,12 @@ def collect_sirius_results(
                 # Only update where original is missing or '3'
                 tgt = lvl.isna() | (lvl == "3")
                 has_struct = out.get("_sirius_has_struct")
-                has_formula = out.get("_sirius_has_formula")
                 has_canopus = out.get("_sirius_has_canopus")
                 # Normalize to pandas BooleanDtype to avoid downcasting warnings
                 bs = has_struct.astype("boolean") if has_struct is not None else None
-                bf = has_formula.astype("boolean") if has_formula is not None else None
                 bc = has_canopus.astype("boolean") if has_canopus is not None else None
-                struct_mask = (bs.fillna(False) if bs is not None else False)
-                canopus_mask = (bc.fillna(False) if bc is not None else False)
+                struct_mask = bs.fillna(False) if bs is not None else False
+                canopus_mask = bc.fillna(False) if bc is not None else False
                 # Assign levels using explicit boolean masks
                 out.loc[tgt & struct_mask, lvl_col] = "3"
                 # L4 is CANOPUS-only (no structure but CANOPUS class available)
@@ -280,9 +503,22 @@ def collect_sirius_results(
                 out.loc[tgt & ~struct_mask & ~canopus_mask, lvl_col] = "5"
                 # Compute post-merge annotation level counts
                 vc = out[lvl_col].astype(str).value_counts()
-                ann_counts = {k: int(vc.get(k, 0)) for k in ["1","2","3","4","5"]}
+                ann_counts = {k: int(vc.get(k, 0)) for k in ["1", "2", "3", "4", "5"]}
             # Drop helper columns
-            out = out.drop(columns=[c for c in ("sirius_name","_sirius_has_struct","_sirius_has_formula","_sirius_has_canopus","_polarity") if c in out.columns], errors="ignore")
+            out = out.drop(
+                columns=[
+                    c
+                    for c in (
+                        "sirius_name",
+                        "_sirius_has_struct",
+                        "_sirius_has_formula",
+                        "_sirius_has_canopus",
+                        "_polarity",
+                    )
+                    if c in out.columns
+                ],
+                errors="ignore",
+            )
             out.to_csv(output_csv, index=False)
         else:
             # No feature_id in merged; just write identifications table

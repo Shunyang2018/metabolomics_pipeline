@@ -9,12 +9,14 @@ def get_logger():
         from rich.console import Console
         from rich.theme import Theme
 
-        theme = Theme({
-            "info": "cyan",
-            "warn": "yellow",
-            "error": "bold red",
-            "ok": "green",
-        })
+        theme = Theme(
+            {
+                "info": "cyan",
+                "warn": "yellow",
+                "error": "bold red",
+                "ok": "green",
+            }
+        )
         console = Console(theme=theme)
 
         class _RichLogger:
@@ -32,6 +34,7 @@ def get_logger():
 
         return _RichLogger()
     except Exception:
+
         class _PlainLogger:
             def info(self, msg: str):
                 print(f"INFO: {msg}")

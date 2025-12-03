@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import re
-from typing import Iterable, List, Tuple
+from typing import List, Tuple
 
 
 def infer_chrom_from_name(name: str) -> str:
@@ -26,7 +26,9 @@ def infer_mode_from_name(name: str) -> str:
     return "UNK"
 
 
-_TOKEN_PAT = re.compile(r"(?i)(^|[\W_])(lipidomics|lipids|lipid|hilic|c18|pos|neg|ms1)(?=($|[\W_]))")
+_TOKEN_PAT = re.compile(
+    r"(?i)(^|[\W_])(lipidomics|lipids|lipid|hilic|c18|pos|neg|ms1)(?=($|[\W_]))"
+)
 
 
 def normalize_sample_id_core(name: str) -> str:

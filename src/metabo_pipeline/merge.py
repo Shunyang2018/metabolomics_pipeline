@@ -6,20 +6,20 @@ from typing import Callable, Dict, List, Optional
 
 import pandas as pd
 
-from .constants import (
-    MSMS_MIN_IONS,
-    SNR_MIN,
-    DEDUP_RT_WINDOW_MIN,
-    DEDUP_MZ_PPM,
-    BLANK_FOLD_MIN,
-    PRESENT_PERCENT_MIN,
-    CV_PERCENT_MAX,
-)
-from .utils import infer_chrom_from_name, infer_mode_from_name, normalize_sample_id_core
 from .annotations import annotate_levels
-from .qc import count_msms_ions, build_group_cols, compute_group_metrics, pass_any_mask
+from .constants import (
+    BLANK_FOLD_MIN,
+    CV_PERCENT_MAX,
+    DEDUP_MZ_PPM,
+    DEDUP_RT_WINDOW_MIN,
+    MSMS_MIN_IONS,
+    PRESENT_PERCENT_MIN,
+    SNR_MIN,
+)
 from .dedup import l3_representatives
+from .qc import build_group_cols, compute_group_metrics, count_msms_ions, pass_any_mask
 from .sirius_export import build_ms_entries, write_ms_files
+from .utils import infer_chrom_from_name, infer_mode_from_name, normalize_sample_id_core
 
 
 def list_alignment_files(input_dir: Path, recursive: bool = False) -> List[Path]:
@@ -43,7 +43,15 @@ def merge_folder_to_wide_csv(
 ) -> Dict[str, int]:
     """Merge filtered MS-DIAL tables into a single wide-format CSV."""
     files = list_alignment_files(input_dir, recursive=recursive)
-    totals = {"raw": 0, "after_msms": 0, "after_snr": 0, "after_pass": 0, "ann1": 0, "ann2": 0, "ann3": 0}
+    totals = {
+        "raw": 0,
+        "after_msms": 0,
+        "after_snr": 0,
+        "after_pass": 0,
+        "ann1": 0,
+        "ann2": 0,
+        "ann3": 0,
+    }
     per_file: List[Dict[str, int]] = []
 
     frames: List[pd.DataFrame] = []
@@ -52,7 +60,13 @@ def merge_folder_to_wide_csv(
         df = pd.read_csv(p, header=4, encoding="utf-8-sig")
 
         cols = list(df.columns)
-        last_meta_col = cols.index("MS/MS spectrum") if "MS/MS spectrum" in cols else max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
+        last_meta_col = (
+            cols.index("MS/MS spectrum")
+            if "MS/MS spectrum" in cols
+            else max(
+                30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30
+            )
+        )
         sample_cols_raw = cols[last_meta_col + 1 :]
 
         raw_cnt = int(df.shape[0])
@@ -91,7 +105,9 @@ def merge_folder_to_wide_csv(
         blank_col = "blank" if "blank" in feat_df.columns else None
         group_cols = build_group_cols(norm_sample_cols)
         feat_df = compute_group_metrics(feat_df, group_cols, blank_col)
-        mask = pass_any_mask(feat_df, group_cols, BLANK_FOLD_MIN, PRESENT_PERCENT_MIN, CV_PERCENT_MAX)
+        mask = pass_any_mask(
+            feat_df, group_cols, BLANK_FOLD_MIN, PRESENT_PERCENT_MIN, CV_PERCENT_MAX
+        )
         feat_df = feat_df[mask].copy()
 
         # Per-file stats
@@ -99,9 +115,24 @@ def merge_folder_to_wide_csv(
         a1 = int((ann == "1").sum()) if ann is not None else 0
         a2 = int((ann == "2").sum()) if ann is not None else 0
         a3 = int((ann == "3").sum()) if ann is not None else 0
-        rec = {"file": p.name, "raw": raw_cnt, "after_msms": after_msms, "after_snr": after_snr, "after_pass": int(feat_df.shape[0]), "ann1": a1, "ann2": a2, "ann3": a3}
+        rec = {
+            "file": p.name,
+            "raw": raw_cnt,
+            "after_msms": after_msms,
+            "after_snr": after_snr,
+            "after_pass": int(feat_df.shape[0]),
+            "ann1": a1,
+            "ann2": a2,
+            "ann3": a3,
+        }
         per_file.append(rec)
-        totals["raw"] += raw_cnt; totals["after_msms"] += after_msms; totals["after_snr"] += after_snr; totals["after_pass"] += int(feat_df.shape[0]); totals["ann1"] += a1; totals["ann2"] += a2; totals["ann3"] += a3
+        totals["raw"] += raw_cnt
+        totals["after_msms"] += after_msms
+        totals["after_snr"] += after_snr
+        totals["after_pass"] += int(feat_df.shape[0])
+        totals["ann1"] += a1
+        totals["ann2"] += a2
+        totals["ann3"] += a3
         if progress:
             progress(rec)
 
@@ -158,40 +189,62 @@ def merge_folder_to_wide_csv(
     id_order = [c for c in id_preferred if c in all_cols]
 
     sample_pat = re.compile(r"^m2_[a-z0-9]+_.+")
-    metric_cols = sorted(c for c in all_cols if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_")))
-    pass_cols = sorted(
-        c for c in all_cols
-        if str(c).startswith("pass_") or c in ("pass_any_groups", "_polarity", "_rt", "_mz", "_sn", "_wd")
+    metric_cols = sorted(
+        c
+        for c in all_cols
+        if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_"))
     )
-    sample_cols = sorted(c for c in all_cols if c not in set(id_order) and c not in set(metric_cols) and c not in set(pass_cols) and sample_pat.match(str(c)))
-    other_cols = sorted(c for c in all_cols if c not in set(id_order + sample_cols + metric_cols + pass_cols))
+    pass_cols = sorted(
+        c
+        for c in all_cols
+        if str(c).startswith("pass_")
+        or c in ("pass_any_groups", "_polarity", "_rt", "_mz", "_sn", "_wd")
+    )
+    sample_cols = sorted(
+        c
+        for c in all_cols
+        if c not in set(id_order)
+        and c not in set(metric_cols)
+        and c not in set(pass_cols)
+        and sample_pat.match(str(c))
+    )
+    other_cols = sorted(
+        c
+        for c in all_cols
+        if c not in set(id_order + sample_cols + metric_cols + pass_cols)
+    )
     out_cols = id_order + other_cols + sample_cols + metric_cols
     if out_cols:
         merged = merged.reindex(columns=out_cols)
 
-    # L3 representatives for merged CSV (only keep those that will be exported to SIRIUS)
+    # L3 representatives for merged CSV
     rows_pre = int(merged.shape[0])
-    l3_keep_export = None
+    l3_keep_all = None
+    l3_keep_sirius = None
     if "annotation_level" in merged.columns and not merged.empty:
         l3 = merged[merged["annotation_level"] == "3"].copy()
         non_l3 = merged[merged["annotation_level"] != "3"].copy()
         if not l3.empty:
-            # First get RT/mz representatives
-            l3_keep = l3_representatives(l3, DEDUP_RT_WINDOW_MIN, DEDUP_MZ_PPM)
-            # Then restrict to m/z 150–800 (final export set)
-            if "Average Mz" in l3_keep.columns:
-                mzv = pd.to_numeric(l3_keep["Average Mz"], errors="coerce")
-                l3_keep_export = l3_keep[(mzv >= 150.0) & (mzv <= 800.0)].copy()
+            # First get RT/mz representatives (all Level 3)
+            l3_keep_all = l3_representatives(l3, DEDUP_RT_WINDOW_MIN, DEDUP_MZ_PPM)
+
+            # All L3 representatives go into merged.csv (no m/z filter)
+            merged = pd.concat([non_l3, l3_keep_all], axis=0, ignore_index=True)
+
+            # Only export m/z 150-800 to SIRIUS (SIRIUS optimal range)
+            if "Average Mz" in l3_keep_all.columns:
+                mzv = pd.to_numeric(l3_keep_all["Average Mz"], errors="coerce")
+                sirius_range = (mzv >= 150.0) & (mzv <= 800.0)
+                l3_keep_sirius = l3_keep_all[sirius_range].copy()
             else:
-                l3_keep_export = l3_keep.copy()
-            merged = pd.concat([non_l3, l3_keep_export], axis=0, ignore_index=True)
+                l3_keep_sirius = l3_keep_all.copy()
     rows_post = int(merged.shape[0])
 
-    # SIRIUS export from merged L3 representatives (same set as kept in merged)
-    if l3_keep_export is None:
-        l3_keep_export = pd.DataFrame()
-    sirius_l3_total = int(l3_keep_export.shape[0]) if not l3_keep_export.empty else 0
-    pos_entries, neg_entries = build_ms_entries(l3_keep_export)
+    # SIRIUS export only from L3 compounds in 150-800 Da range
+    if l3_keep_sirius is None:
+        l3_keep_sirius = pd.DataFrame()
+    sirius_l3_total = int(l3_keep_sirius.shape[0]) if not l3_keep_sirius.empty else 0
+    pos_entries, neg_entries = build_ms_entries(l3_keep_sirius)
     sp, sn = write_ms_files(pos_entries, neg_entries, output_csv.parent)
 
     # Write CSV
@@ -206,9 +259,21 @@ def merge_folder_to_wide_csv(
         "totals": totals,
         "per_file": per_file,
         "ann_post": {
-            "1": int((merged["annotation_level"] == "1").sum()) if "annotation_level" in merged.columns else 0,
-            "2": int((merged["annotation_level"] == "2").sum()) if "annotation_level" in merged.columns else 0,
-            "3": int((merged["annotation_level"] == "3").sum()) if "annotation_level" in merged.columns else 0,
+            "1": (
+                int((merged["annotation_level"] == "1").sum())
+                if "annotation_level" in merged.columns
+                else 0
+            ),
+            "2": (
+                int((merged["annotation_level"] == "2").sum())
+                if "annotation_level" in merged.columns
+                else 0
+            ),
+            "3": (
+                int((merged["annotation_level"] == "3").sum())
+                if "annotation_level" in merged.columns
+                else 0
+            ),
         },
         "isomer_post": {
             "metabolites_with_isomers": 0,  # can be recomputed if needed

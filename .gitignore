@@ -29,6 +29,7 @@ logs/
 report/
 outputs/
 artifacts/
+*.sirius
 
 # --- Project-specific: do NOT track input data ---
 # MS-DIAL alignment tables and other dataset files sitting in the repo root
@@ -44,3 +45,7 @@ M2 data/
 # Allow small example templates if later added
 !examples/**
 !configs/**
+
+# SIRIUS credentials (keep private)
+.env.sirius
+!.env.sirius.template

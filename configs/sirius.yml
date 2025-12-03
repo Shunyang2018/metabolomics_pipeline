@@ -1,36 +1,37 @@
 sirius:
-  executable: sirius  # Windows: C:\Program Files\SIRIUS\sirius.exe; macOS: /Applications/sirius.app/Contents/MacOS/sirius
-  cores: 8
-  mzdev_ppm: 10.0
+  # executable: leave unset to use constants.py: SIRIUS_EXECUTABLE
+  cores: 8            # Override in constants.py: SIRIUS_CORES
+  mzdev_ppm: 10.0     # Override in constants.py: SIRIUS_MZDEV_PPM
+
+# Adduct settings from working command example
 adducts:
-  neg_detectable: '[[M - H]-, [M - H2O - H]-]'
-  neg_fallback: '[[M]-, [M + CH2O2 - H]-, [M + C2HF3O2 - H]-, [M - H + Na - H]-, [M
-    - H + K - H]-, [M + C2H4O2 - H]-, [M + C2H3N - H]-, [M - H]-, [M - H2O - H]-]'
+  neg_detectable: ''  # Empty per working example
+  neg_fallback: '[[M-H]-,[M+Cl]-,[M+Br]-,[M]-,[M-CH3-H]-,[M-H3N-H]-,[M-H2O-H]-,[M-ClH-H]-,[M-CO2-H]-,[M-CH2O3-H]-,[M+H2O-H]-,[M+C2H3N-H]-,[M+CH2O2-H]-,[M+C2H4O2-H]-,[M+C2HF3O2-H]-,[M-H+Na-H]-,[M-H+K-H]-]'
+  neg_enforced: '[[M-H]-,[M+Cl]-,[M+Br]-,[M]-,[M-CH3-H]-,[M-H3N-H]-,[M-H2O-H]-,[M-ClH-H]-,[M-CO2-H]-,[M-CH2O3-H]-,[M+H2O-H]-,[M+C2H3N-H]-,[M+CH2O2-H]-,[M+C2H4O2-H]-,[M+C2HF3O2-H]-,[M-H+Na-H]-,[M-H+K-H]-]'
   pos_detectable: '[[M + H]+, [M + Na]+]'
-  pos_fallback: '[[M]+, [M + NH4]+, [M + Na]+, [M + K]+, [M + CH3OH + H]+, [M + ACN
-    + H]+, [M + 2Na - H]+]'
+  pos_fallback: '[[M]+, [M + NH4]+, [M + Na]+, [M + K]+, [M + CH3OH + H]+, [M + ACN + H]+, [M + 2Na - H]+]'
+
+# Configuration options from working SIRIUS command
 common_config:
-- --IsotopeSettings.filter=true
-- --FormulaSearchDB=
-- --Timeout.secondsPerTree=0
-- --FormulaSettings.enforced=HCNOPS
-- --Timeout.secondsPerInstance=0
-- --UseHeuristic.mzToUseHeuristicOnly=650
-- --AlgorithmProfile=orbitrap
-- --IsotopeMs2Settings=IGNORE
+- --AlgorithmProfile=qtof
+- --AdductSettings.ignoreDetectedAdducts=true
 - --MS2MassDeviation.allowedMassDeviation=10.0ppm
-- --NumberOfCandidatesPerIon=1
-- --UseHeuristic.mzToUseHeuristic=300
-- --FormulaSettings.detectable=,
-- --NumberOfCandidates=10
-- --AdductSettings.enforced=,
-- --FormulaResultThreshold=true
-- --InjectElGordoCompounds=true
-- --StructureSearchDB=BIO,METACYC,CHEBI,COCONUT,ECOCYCMINE,GNPS,HMDB,HSDB,KEGG,KEGGMINE,KNAPSACK,MACONDA,MESH,NORMAN,UNDP,PLANTCYC,PUBCHEM,PUBMED,YMDB,YMDBMINE,ZINCBIO
-- --RecomputeResults
-- 'true'
+- --SpectralSearchDB=PUBCHEM,METACYC,BloodExposome,CHEBI,COCONUT,DSSTox,FooDB,GNPS,HMDB,HSDB,KEGG,KNAPSACK,LOTUS,LIPIDMAPS,MACONDA,MESH,MiMeDB,NORMAN,PLANTCYC,PUBCHEMANNOTATIONBIO,PUBCHEMANNOTATIONDRUG,PUBCHEMANNOTATIONFOOD,PUBCHEMANNOTATIONSAFETYANDTOXIC,PUBMED,SUPERNATURAL,TeroMol,YMDB
+- --FormulaSettings.enforced=H,C,N,O,P
+- --RecomputeResults=true
+- --IdentitySearchSettings.precursorDeviation=20.0ppm
+- --AdductSettings.prioritizeInputFileAdducts=false
+- --FormulaSearchSettings.performDeNovoBelowMz=800.0
+- --FormulaSearchSettings.performBottomUpAboveMz=0
+- --ExpansiveSearchConfidenceMode.confidenceScoreSimilarityMode=OFF
+- --FormulaSearchDB=,
+- --StructureSearchDB=PUBCHEM,METACYC,BloodExposome,CHEBI,COCONUT,DSSTox,FooDB,GNPS,HMDB,HSDB,KEGG,KNAPSACK,LOTUS,LIPIDMAPS,MACONDA,MESH,MiMeDB,NORMAN,PLANTCYC,PUBCHEMANNOTATIONBIO,PUBCHEMANNOTATIONDRUG,PUBCHEMANNOTATIONFOOD,PUBCHEMANNOTATIONSAFETYANDTOXIC,PUBMED,SUPERNATURAL,TeroMol,YMDB
+- --SpectralSearchLog=0
+
+# Full task list from working example
 tasks:
-- formula
-- fingerprint
-- structure
-- canopus
+- spectra-search
+- formulas
+- fingerprints
+- classes
+- structures

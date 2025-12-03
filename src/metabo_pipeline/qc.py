@@ -1,8 +1,9 @@
 from __future__ import annotations
 
+from typing import Dict, List
+
 import numpy as np
 import pandas as pd
-from typing import Dict, List, Tuple
 
 
 def count_msms_ions(msms: str) -> int:
@@ -41,7 +42,9 @@ def build_group_cols(sample_cols: List[str]) -> Dict[str, List[str]]:
     return group_cols
 
 
-def compute_group_metrics(df: pd.DataFrame, group_cols: Dict[str, List[str]], blank_col: str | None) -> pd.DataFrame:
+def compute_group_metrics(
+    df: pd.DataFrame, group_cols: Dict[str, List[str]], blank_col: str | None
+) -> pd.DataFrame:
     """Compute blank fold, presence, and CV metrics per replicate group."""
     df = df.copy()
 
@@ -52,7 +55,7 @@ def compute_group_metrics(df: pd.DataFrame, group_cols: Dict[str, List[str]], bl
     for col in df.columns:
         if col == blank_col:
             continue
-        tokens = [tok for tok in str(col).lower().replace('-', '_').split('_') if tok]
+        tokens = [tok for tok in str(col).lower().replace("-", "_").split("_") if tok]
         if "blank" in tokens:
             blank_cols.append(col)
 
@@ -62,15 +65,17 @@ def compute_group_metrics(df: pd.DataFrame, group_cols: Dict[str, List[str]], bl
         blank_avg = blank_values.mean(axis=1, skipna=True)
         blank_denom = blank_avg.replace(0, np.nan)
     else:
-        blank_avg = pd.Series([float('nan')] * len(df), index=df.index)
+        blank_avg = pd.Series([float("nan")] * len(df), index=df.index)
         blank_denom = blank_avg
 
-    sample_cols_all: List[str] = sorted({c for cols in group_cols.values() for c in cols})
+    sample_cols_all: List[str] = sorted(
+        {c for cols in group_cols.values() for c in cols}
+    )
     if sample_cols_all:
         sample_vals = df[sample_cols_all].apply(pd.to_numeric, errors="coerce")
         max_all_samples = sample_vals.max(axis=1, skipna=True)
     else:
-        max_all_samples = pd.Series([float('nan')] * len(df), index=df.index)
+        max_all_samples = pd.Series([float("nan")] * len(df), index=df.index)
 
     for grp, cols_grp in group_cols.items():
         vals = df[cols_grp].apply(pd.to_numeric, errors="coerce")
@@ -108,8 +113,16 @@ def pass_any_mask(
         pp = df.get(f"present_percent_{grp}")
         cv = df.get(f"cv_percent_{grp}")
 
-        bf_series = pd.to_numeric(bf, errors="coerce") if bf is not None else pd.Series(np.nan, index=df.index)
-        pp_series = pd.to_numeric(pp, errors="coerce") if pp is not None else pd.Series(np.nan, index=df.index)
+        bf_series = (
+            pd.to_numeric(bf, errors="coerce")
+            if bf is not None
+            else pd.Series(np.nan, index=df.index)
+        )
+        pp_series = (
+            pd.to_numeric(pp, errors="coerce")
+            if pp is not None
+            else pd.Series(np.nan, index=df.index)
+        )
         mask = (bf_series >= blank_fold_min) & (pp_series >= present_min)
         if cv_max is not None and cv is not None:
             cv_series = pd.to_numeric(cv, errors="coerce")
@@ -122,4 +135,3 @@ def pass_any_mask(
     for other in passes[1:]:
         m = m | other
     return m
-

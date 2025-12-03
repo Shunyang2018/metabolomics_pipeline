@@ -2,15 +2,22 @@ from __future__ import annotations
 
 import pandas as pd
 
+
 def _to_float(val):
     """Coerce a value to float."""
     return float(val)
+
 
 def assign_annotation_level_row(row: pd.Series) -> str:
     """Infer an annotation level for a single MS-DIAL row."""
     name = str(row.get("Metabolite name", "")).strip()
     lname = name.lower()
-    if (not name) or lname.startswith("unknown") or lname.startswith("low score") or lname.startswith("no ms2"):
+    if (
+        (not name)
+        or lname.startswith("unknown")
+        or lname.startswith("low score")
+        or lname.startswith("no ms2")
+    ):
         return "3"
 
     wdot = _to_float(row["Weighted dot product"])

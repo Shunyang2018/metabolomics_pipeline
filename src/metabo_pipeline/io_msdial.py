@@ -10,7 +10,7 @@ from __future__ import annotations
 import csv
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple, Callable
+from typing import Dict, List
 
 from .merge import merge_folder_to_wide_csv  # re-export for CLI compatibility
 
@@ -31,7 +31,9 @@ class MSDialSummary:
     metadata: MSDialMetadata
 
 
-def _read_first_rows(path: Path, n: int = 6, encoding: str = "utf-8-sig") -> List[List[str]]:
+def _read_first_rows(
+    path: Path, n: int = 6, encoding: str = "utf-8-sig"
+) -> List[List[str]]:
     """Read the first few header rows from an MS-DIAL export."""
     rows: List[List[str]] = []
     with path.open("r", encoding=encoding, newline="") as f:
@@ -80,7 +82,14 @@ def summarize_alignment_table(path: Path) -> MSDialSummary:
             if i >= 5:
                 n_features += 1
 
-    return MSDialSummary(path=path, n_features=n_features, samples=sample_names, metadata=meta)
+    return MSDialSummary(
+        path=path, n_features=n_features, samples=sample_names, metadata=meta
+    )
 
 
-__all__ = ["merge_folder_to_wide_csv", "summarize_alignment_table", "MSDialSummary", "MSDialMetadata"]
+__all__ = [
+    "merge_folder_to_wide_csv",
+    "summarize_alignment_table",
+    "MSDialSummary",
+    "MSDialMetadata",
+]

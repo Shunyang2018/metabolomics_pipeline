@@ -20,9 +20,25 @@ def main(input_dir: str, output_csv: str):
     with out_path.open("r", encoding="utf-8") as f:
         r = csv.DictReader(f)
         row = next(r)
-        fixed = {k: row[k] for k in ("chrom","annotation_level","alignment_id","metabolite_name")}
+        fixed = {
+            k: row[k]
+            for k in ("chrom", "annotation_level", "alignment_id", "metabolite_name")
+        }
         # show up to 5 sample columns
-        sample_cols = [c for c in r.fieldnames if c not in ("chrom","annotation_level","alignment_id","rt_min","mz","metabolite_name","adduct")]
+        sample_cols = [
+            c
+            for c in r.fieldnames
+            if c
+            not in (
+                "chrom",
+                "annotation_level",
+                "alignment_id",
+                "rt_min",
+                "mz",
+                "metabolite_name",
+                "adduct",
+            )
+        ]
         preview_samples = {c: row[c] for c in sample_cols[:5]}
         print({**fixed, **preview_samples})
 

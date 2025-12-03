@@ -6,6 +6,7 @@ import shutil
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+
 def _collect_default_candidates(system: str, exe_name: str) -> List[Tuple[str, str]]:
     """Enumerate platform-specific fallback paths for the SIRIUS executable."""
     candidates: List[Tuple[str, str]] = []
@@ -18,7 +19,11 @@ def _collect_default_candidates(system: str, exe_name: str) -> List[Tuple[str, s
     home_bin = Path.home() / "sirius" / "bin" / exe_name
     candidates.append((str(home_bin), "home:sirius/bin"))
     if system == "Windows":
-        program_files = [os.environ.get("ProgramFiles"), os.environ.get("ProgramFiles(x86)"), os.environ.get("LOCALAPPDATA")]
+        program_files = [
+            os.environ.get("ProgramFiles"),
+            os.environ.get("ProgramFiles(x86)"),
+            os.environ.get("LOCALAPPDATA"),
+        ]
         for root in program_files:
             if not root:
                 continue
@@ -31,7 +36,12 @@ def _collect_default_candidates(system: str, exe_name: str) -> List[Tuple[str, s
                 ("Programs", "sirius", exe_name),
                 ("Programs", "Sirius", exe_name),
             ):
-                candidates.append((str(root_path.joinpath(*parts)), f"default:{root_path.name}/{'/'.join(parts)}"))
+                candidates.append(
+                    (
+                        str(root_path.joinpath(*parts)),
+                        f"default:{root_path.name}/{'/'.join(parts)}",
+                    )
+                )
     elif system == "Darwin":
         apps = [Path("/Applications"), Path.home() / "Applications"]
         for base in apps:
@@ -49,7 +59,10 @@ def _collect_default_candidates(system: str, exe_name: str) -> List[Tuple[str, s
             candidates.append((str(path), "linux-default"))
     return candidates
 
-def guess_sirius_executable(preferred: Optional[str] = None) -> Tuple[str, Optional[str]]:
+
+def guess_sirius_executable(
+    preferred: Optional[str] = None,
+) -> Tuple[str, Optional[str]]:
     """Return a likely path to the SIRIUS executable and a note describing the source."""
     system = platform.system()
     exe_name = "sirius.exe" if system == "Windows" else "sirius"
