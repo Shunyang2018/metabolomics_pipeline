@@ -17,7 +17,10 @@ def count_msms_ions(msms: str) -> int:
     for tok in s.split():
         if ":" not in tok:
             continue
-        inten = float(tok.split(":", 1)[1])
+        try:
+            inten = float(tok.split(":", 1)[1])
+        except ValueError:
+            continue
         if inten > 0:
             cnt += 1
     return cnt
