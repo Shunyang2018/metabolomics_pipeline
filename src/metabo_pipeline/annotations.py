@@ -3,9 +3,9 @@ from __future__ import annotations
 import pandas as pd
 
 
-def _to_float(val):
-    """Coerce a value to float."""
-    return float(val)
+def _to_float(val) -> float:
+    """Coerce a value to float, returning NaN for blank/non-numeric input."""
+    return pd.to_numeric(val, errors="coerce")
 
 
 def assign_annotation_level_row(row: pd.Series) -> str:
@@ -20,15 +20,16 @@ def assign_annotation_level_row(row: pd.Series) -> str:
     ):
         return "3"
 
-    wdot = _to_float(row["Weighted dot product"])
-    rdot = _to_float(row["Reverse dot product"])
-    mcount = int(round(float(row["Matched peaks count"])))
+    wdot = _to_float(row.get("Weighted dot product"))
+    rdot = _to_float(row.get("Reverse dot product"))
+    mcount_f = _to_float(row.get("Matched peaks count"))
+    mcount = int(round(mcount_f)) if pd.notna(mcount_f) else 0
 
     # Weak or missing weighted score → Level 3
     if not pd.notna(wdot) or wdot < 0.5:
         return "3"
     # If there are no matched peaks reported by MS-DIAL, treat as Level 3
-    if mcount is None or mcount < 1:
+    if mcount < 1:
         return "3"
 
     # Level 1 rule (scores assumed on 0–1 scale) — require sufficient matched peaks
