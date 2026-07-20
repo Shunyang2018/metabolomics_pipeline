@@ -82,19 +82,23 @@ def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
     # Key files
     struct_file = sirius_dir / "structure_identifications.tsv"
     canopus_file = sirius_dir / "canopus_structure_summary.tsv"
+    formula_file = sirius_dir / "formula_identifications.tsv"
+    canopus_formula_file = sirius_dir / "canopus_formula_summary.tsv"
 
-    if not struct_file.exists():
+    if not struct_file.exists() and not formula_file.exists():
         return results
 
     # Read structure identifications (top hit per compound)
-    try:
-        struct_df = pd.read_csv(struct_file, sep="\t", low_memory=False)
-    except Exception as e:
-        print(f"Warning: Failed to read {struct_file}: {e}")
-        return results
+    struct_df = None
+    if struct_file.exists():
+        try:
+            struct_df = pd.read_csv(struct_file, sep="\t", low_memory=False)
+        except Exception as e:
+            print(f"Warning: Failed to read {struct_file}: {e}")
+            struct_df = None
 
     # Filter to rank 1 only (top hits)
-    if "structurePerIdRank" in struct_df.columns:
+    if struct_df is not None and "structurePerIdRank" in struct_df.columns:
         struct_df = struct_df[struct_df["structurePerIdRank"] == 1].copy()
 
     # Read CANOPUS if available
@@ -108,7 +112,102 @@ def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
             print(f"Warning: Failed to read {canopus_file}: {e}")
             canopus_df = None
 
-    # Merge on mappingFeatureId
+    # If structures are missing, fall back to formula summaries
+    if struct_df is None or struct_df.empty:
+        if not formula_file.exists():
+            return results
+        try:
+            formula_df = pd.read_csv(formula_file, sep="\t", low_memory=False)
+        except Exception as e:
+            print(f"Warning: Failed to read {formula_file}: {e}")
+            return results
+
+        if "formulaRank" in formula_df.columns:
+            formula_df = formula_df[formula_df["formulaRank"] == 1].copy()
+
+        canopus_formula_df = None
+        if canopus_formula_file.exists():
+            try:
+                canopus_formula_df = pd.read_csv(
+                    canopus_formula_file, sep="\t", low_memory=False
+                )
+                if "formulaRank" in canopus_formula_df.columns:
+                    canopus_formula_df = canopus_formula_df[
+                        canopus_formula_df["formulaRank"] == 1
+                    ].copy()
+            except Exception as e:
+                print(f"Warning: Failed to read {canopus_formula_file}: {e}")
+                canopus_formula_df = None
+
+        if (
+            canopus_formula_df is not None
+            and "mappingFeatureId" in formula_df.columns
+            and "mappingFeatureId" in canopus_formula_df.columns
+        ):
+            merged = formula_df.merge(
+                canopus_formula_df[
+                    [
+                        "mappingFeatureId",
+                        "ClassyFire#most specific class",
+                        "ClassyFire#superclass",
+                        "ClassyFire#class",
+                    ]
+                ],
+                on="mappingFeatureId",
+                how="left",
+            )
+        else:
+            merged = formula_df.copy()
+
+        for _, row in merged.iterrows():
+            fid = _extract_feature_id_from_v6_mapping(row.get("mappingFeatureId"))
+            if fid is None:
+                if "alignedFeatureId" in row and pd.notna(row.get("alignedFeatureId")):
+                    try:
+                        fid = int(row["alignedFeatureId"])
+                    except (ValueError, TypeError):
+                        pass
+            if fid is None:
+                continue
+
+            has_formula = bool(pd.notna(row.get("molecularFormula")))
+            canopus_super = (
+                row.get("ClassyFire#superclass")
+                if pd.notna(row.get("ClassyFire#superclass"))
+                else None
+            )
+            canopus_class = (
+                row.get("ClassyFire#class")
+                if pd.notna(row.get("ClassyFire#class"))
+                else None
+            )
+            canopus_specific = (
+                row.get("ClassyFire#most specific class")
+                if pd.notna(row.get("ClassyFire#most specific class"))
+                else None
+            )
+            has_canopus = any([canopus_super, canopus_class, canopus_specific])
+
+            results.append(
+                {
+                    "feature_id": fid,
+                    "sirius_name": None,
+                    "_polarity": polarity,
+                    "_sirius_has_struct": False,
+                    "_sirius_has_formula": has_formula,
+                    "_sirius_has_canopus": has_canopus,
+                    "SIRIUS_canopus_superclass": canopus_super,
+                    "SIRIUS_canopus_class": canopus_class,
+                    "SIRIUS_canopus_most_specific": canopus_specific,
+                    "molecularFormula": row.get("molecularFormula")
+                    if pd.notna(row.get("molecularFormula"))
+                    else None,
+                }
+            )
+
+        return results
+
+    # Merge on mappingFeatureId (structure-based)
     if (
         canopus_df is not None
         and "mappingFeatureId" in struct_df.columns
@@ -377,7 +476,10 @@ def collect_sirius_results(
     # Load cached extraction if available and not forcing rescan
     df: pd.DataFrame
     if extract_cache and (not force_rescan) and extract_cache.exists():
-        df = pd.read_csv(extract_cache)
+        try:
+            df = pd.read_csv(extract_cache)
+        except pd.errors.EmptyDataError:
+            df = pd.DataFrame()
     else:
         # Perform scan based on configured SIRIUS version
         if pos_dir and pos_dir.exists():
@@ -473,8 +575,13 @@ def collect_sirius_results(
     if join_with_merged and join_with_merged.exists():
         merged = pd.read_csv(join_with_merged)
         if "feature_id" in merged.columns:
-            # Left-join SIRIUS onto merged to keep all original rows
-            out = merged.merge(df, on="feature_id", how="left")
+            if df.empty:
+                # No SIRIUS results collected (e.g. SIRIUS skipped/not yet run);
+                # pass the merged table through unchanged.
+                out = merged.copy()
+            else:
+                # Left-join SIRIUS onto merged to keep all original rows
+                out = merged.merge(df, on="feature_id", how="left")
             # Overwrite 'Metabolite name' only where a sirius_name exists
             if "sirius_name" in out.columns and "Metabolite name" in out.columns:
                 sn = out["sirius_name"].astype("string")
@@ -493,8 +600,12 @@ def collect_sirius_results(
                 # Normalize to pandas BooleanDtype to avoid downcasting warnings
                 bs = has_struct.astype("boolean") if has_struct is not None else None
                 bc = has_canopus.astype("boolean") if has_canopus is not None else None
-                struct_mask = bs.fillna(False) if bs is not None else False
-                canopus_mask = bc.fillna(False) if bc is not None else False
+                struct_mask = (
+                    bs.fillna(False) if bs is not None else pd.Series(False, index=out.index)
+                )
+                canopus_mask = (
+                    bc.fillna(False) if bc is not None else pd.Series(False, index=out.index)
+                )
                 # Assign levels using explicit boolean masks
                 out.loc[tgt & struct_mask, lvl_col] = "3"
                 # L4 is CANOPUS-only (no structure but CANOPUS class available)
