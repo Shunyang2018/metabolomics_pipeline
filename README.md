@@ -38,11 +38,12 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, appl
 - Outputs include SIRIUS inputs: `outputs/sirius_unknown_pos.ms` and `outputs/sirius_unknown_neg.ms` built from Level 3 unknowns (m/z 150–800)
 
 ## Commands
-- `metabo run`: **run the complete pipeline** - merge → (classify + sirius in parallel) → final. One command to do it all!
+- `metabo run`: **run the complete pipeline** - merge → (classify + sirius in parallel) → final → bioactivity. One command to do it all!
 - `metabo merge`: combine multiple alignment tables into a wide matrix; writes `outputs/merged.csv` and SIRIUS `.ms` files for Level 3 unknowns.
 - `metabo classify`: classify Level 1/2 rows via ClassyFire API using unique InChIKeys.
 - `metabo sirius`: run SIRIUS on the exported `.ms` files (formula, fingerprint, structure, CANOPUS).
 - `metabo final`: create the final merged table combining MS-DIAL, ClassyFire, and SIRIUS results.
+- `metabo bioactivity`: match features against a bioactivity reference database via InChIKey skeleton; writes `outputs/bioactives.csv`.
 - `metabo classify-check`: probe a ClassyFire endpoint for availability/latency.
 
 ## Inputs
@@ -86,6 +87,23 @@ Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, appl
     - `metabo final`
     - Defaults: reuses `outputs/sirius_identifications.csv` if present (no progress bar). To force a rescan of folders, add `--rescan`.
     - If `outputs/merged_classyfire.csv` exists, it is used automatically as the join target; output defaults to `<join>_final.csv`.
+
+## Bioactivity Matching
+
+- `metabo bioactivity` matches identified/tentatively-identified features against a reference
+  bioactivity database (any CSV with an `InChIKey` column, e.g. a natural-product bioactivity
+  database) and writes `outputs/bioactives.csv`.
+- Matching is done on the **first block of the InChIKey** (the 14-character skeleton hash before
+  the first hyphen), so a feature still matches the database even if stereochemistry, protonation
+  state, or isotope labeling differ slightly.
+- Output shape: one row per `(feature, sample it was detected in, bioactivity hit)` — i.e. MS-DIAL
+  feature identity + `sample_type` (the sample column name) + `intensity`, followed by every column
+  from the bioactivity database (`Molecule`, `Benefit`, `Endpoint`, `Evidence.Strength`, etc.). A
+  feature with several database hits (synonyms, multiple reported benefits) produces one row per
+  hit; only samples with nonzero intensity are included.
+- Configure the default database path via `BIOACTIVITY_DB_PATH` in `constants.py`, or override with
+  `metabo bioactivity --db /path/to/database.csv`.
+- Runs automatically as the last step of `metabo run` (skip with `--skip-bioactivity`).
 
 ### Installing SIRIUS on Windows and macOS
 - Windows: Install SIRIUS to `C:\Program Files\SIRIUS\` or set `SIRIUS_HOME`; the CLI auto-detects common locations and honours `SIRIUS_EXECUTABLE`.

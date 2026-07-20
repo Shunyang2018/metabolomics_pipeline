@@ -83,3 +83,13 @@ SIRIUS_MZDEV_PPM: float = 10.0
 INPUT_DIR: str = "/Users/wangs261/Documents/project/excel_merge/test_csv"
 """Default directory containing MS-DIAL alignment output files (CSV/TXT).
 Can be overridden via command line: metabo merge <custom_path>"""
+
+# =============================================================================
+# BIOACTIVITY MATCHING
+# =============================================================================
+BIOACTIVITY_DB_PATH: str = (
+    "/Users/ivanablazenovic/Downloads/"
+    "natural_product_metabolite_bioactivity_database_may_2026.csv"
+)
+"""Path to the bioactivity reference database CSV (must include an InChIKey column).
+Can be overridden via command line: metabo bioactivity --db <custom_path>"""

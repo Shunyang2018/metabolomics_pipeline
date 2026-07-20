@@ -11,6 +11,7 @@ from pathlib import Path
 import typer
 
 from .. import constants
+from ..bioactivity import match_bioactives
 from ..classify import classify_level12_with_classyfire
 from ..logging import get_logger
 from ..merge import merge_folder_to_wide_csv
@@ -108,7 +109,7 @@ def _run_parallel_tasks(tasks, task_names):
 
 def _create_final_merge(merged_csv: str, output_dir: str):
     """Create final merged table with SIRIUS results."""
-    log.info("\n[3/3] CREATING final merged table...")
+    log.info("\n[3/4] CREATING final merged table...")
 
     # Determine output CSV path
     j = Path(merged_csv)
@@ -151,6 +152,33 @@ def _create_final_merge(merged_csv: str, output_dir: str):
         log.info(f"      L5: {ann_counts.get('5', 0)} (Exact mass only)")
 
 
+def _run_bioactivity(output_dir: str, bioactivity_db: str | None) -> None:
+    """Match the final merged table against the bioactivity database."""
+    log.info("\n[4/4] MATCHING bioactivity database...")
+
+    out_dir = Path(output_dir)
+    merged_csv = None
+    for name in ("merged_classyfire_final.csv", "merged_classyfire.csv", "merged.csv"):
+        candidate = out_dir / name
+        if candidate.exists():
+            merged_csv = candidate
+            break
+    if merged_csv is None:
+        log.warn(f"No merged CSV found in {out_dir}; skipping bioactivity match")
+        return
+
+    db_path = Path(bioactivity_db) if bioactivity_db else Path(constants.BIOACTIVITY_DB_PATH)
+    if not db_path.exists():
+        log.warn(f"Bioactivity database not found: {db_path}; skipping bioactivity match")
+        return
+
+    output_csv = out_dir / "bioactives.csv"
+    summary = match_bioactives(merged_csv, db_path, output_csv)
+    log.ok(f"✓ Bioactivity match complete: {output_csv.name}")
+    log.info(f"  • Unique matched molecular skeletons: {summary['unique_matched_skeletons']}")
+    log.info(f"  • Output rows (feature x sample x hit): {summary['output_rows']}")
+
+
 def run(
     input_dir: str = typer.Option(
         None,
@@ -164,13 +192,20 @@ def run(
     ),
     skip_classify: bool = typer.Option(False, help="Skip ClassyFire classification"),
     skip_sirius: bool = typer.Option(False, help="Skip SIRIUS analysis"),
+    skip_bioactivity: bool = typer.Option(
+        False, help="Skip bioactivity database matching"
+    ),
+    bioactivity_db: str = typer.Option(
+        None, help="Path to bioactivity database CSV (default: constants.BIOACTIVITY_DB_PATH)"
+    ),
 ):
-    """Run the complete pipeline: merge → (classify + sirius in parallel) → final.
+    """Run the complete pipeline: merge → (classify + sirius in parallel) → final → bioactivity.
 
     This command orchestrates the full workflow:
     1. Merge MS-DIAL files (unless --skip-merge)
     2. Run ClassyFire and SIRIUS in parallel (independent operations)
     3. Create final merged table with all results
+    4. Match features against a bioactivity database (unless --skip-bioactivity)
 
     ClassyFire and SIRIUS run concurrently to save time!
     """
@@ -188,7 +223,7 @@ def run(
 
     # Step 1: Merge (unless skipped)
     if not skip_merge:
-        log.info("\n[1/3] MERGING MS-DIAL files...")
+        log.info("\n[1/4] MERGING MS-DIAL files...")
         # Call merge directly
         summary = merge_folder_to_wide_csv(
             input_dir=Path(input_dir),
@@ -214,13 +249,13 @@ def run(
                 f"  • SIRIUS inputs: {summary.get('sirius_pos_compounds', 0)} POS, {summary.get('sirius_neg_compounds', 0)} NEG compounds"
             )
     else:
-        log.info(f"\n[1/3] SKIPPING merge (using existing: {merged_csv})")
+        log.info(f"\n[1/4] SKIPPING merge (using existing: {merged_csv})")
         if not Path(merged_csv).exists():
             log.error(f"Merged file not found: {merged_csv}")
             raise typer.Exit(code=1)
 
     # Step 2: Run ClassyFire and SIRIUS in parallel
-    log.info("\n[2/3] RUNNING ClassyFire and SIRIUS in parallel...")
+    log.info("\n[2/4] RUNNING ClassyFire and SIRIUS in parallel...")
 
     tasks = []
     task_names = []
@@ -247,6 +282,12 @@ def run(
     # Step 3: Create final merged table
     _create_final_merge(merged_csv, output_dir)
 
+    # Step 4: Match against bioactivity database
+    if not skip_bioactivity:
+        _run_bioactivity(output_dir, bioactivity_db)
+    else:
+        log.info("\n[4/4] SKIPPING bioactivity matching")
+
     log.info("\n" + "=" * 60)
     log.ok("✓ PIPELINE COMPLETE!")
     log.info("=" * 60)
@@ -256,6 +297,8 @@ def run(
         "merged_classyfire_final.csv" if not skip_classify else "merged_final.csv"
     )
     log.info(f"📁 Final output: {output_dir}/{final_name}")
+    if not skip_bioactivity:
+        log.info(f"📁 Bioactivity matches: {output_dir}/bioactives.csv")
     log.info("")
     log.info("Next steps:")
     log.info("  • Review annotation level distribution above")

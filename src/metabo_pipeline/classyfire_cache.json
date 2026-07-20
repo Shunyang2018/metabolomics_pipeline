@@ -3492,6 +3492,13 @@
     "cf_subclass": "Pyrimidines and pyrimidine derivatives",
     "cf_superclass": "Organoheterocyclic compounds"
   },
+  "FVRWSIPJNWXCEO-UHFFFAOYSA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "Oligopeptides",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
+  },
   "FVXDQWZBHIXIEJ-LNDKUQBDSA-N": {
     "cf_class": "Glycerophospholipids",
     "cf_direct_parent": "Phosphatidylcholines",
@@ -3821,6 +3828,20 @@
     "cf_subclass": "Amino acids, peptides, and analogues",
     "cf_superclass": "Organic acids and derivatives"
   },
+  "GIXSTBOIKJPUKD-QMMMGPOBSA-N": {
+    "cf_class": "Organonitrogen compounds",
+    "cf_direct_parent": "Monoalkylamines",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amines",
+    "cf_superclass": "Organic nitrogen compounds"
+  },
+  "GJCIATLMIJZZIA-UHFFFAOYSA-N": {
+    "cf_class": "Phenols",
+    "cf_direct_parent": "Methoxyphenols",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Methoxyphenols",
+    "cf_superclass": "Benzenoids"
+  },
   "GJNDXQBALKCYSZ-NEPJUHHUSA-N": {
     "cf_class": "Carboxylic acids and derivatives",
     "cf_direct_parent": "Dipeptides",
@@ -3911,6 +3932,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Amino acids, peptides, and analogues",
     "cf_superclass": "Organic acids and derivatives"
+  },
+  "GLVAWJNBOCMLMP-UHFFFAOYSA-N": {
+    "cf_class": "Azoles",
+    "cf_direct_parent": "5-cyclopropylisoxazoles",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Isoxazoles",
+    "cf_superclass": "Organoheterocyclic compounds"
   },
   "GLYWOBCYGRJQGV-UHFFFAOYSA-N": {
     "cf_class": "Glycerolipids",
@@ -4079,6 +4107,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Organosilicon compounds",
     "cf_superclass": "Organometallic compounds"
+  },
+  "GSEJCLTVZPLZKY-UHFFFAOYSA-N": {
+    "cf_class": "Organonitrogen compounds",
+    "cf_direct_parent": "1,2-aminoalcohols",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amines",
+    "cf_superclass": "Organic nitrogen compounds"
   },
   "GSLQFBVNOFBPRJ-UHFFFAOYSA-N": {
     "cf_class": "Imidazopyrimidines",
@@ -4591,6 +4626,13 @@
     "cf_subclass": "Amino acids, peptides, and analogues",
     "cf_superclass": "Organic acids and derivatives"
   },
+  "HNGIZKAMDMBRKJ-LBPRGKRZSA-N": {
+    "cf_class": "Indoles and derivatives",
+    "cf_direct_parent": "3-alkylindoles",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Indoles",
+    "cf_superclass": "Organoheterocyclic compounds"
+  },
   "HNLXNOZHXNSSPN-UHFFFAOYSA-N": {
     "cf_class": "Organooxygen compounds",
     "cf_direct_parent": "Polyethylene glycols",
@@ -4618,6 +4660,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Triradylcglycerols",
     "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "HNXQXTQTPAJEJL-UHFFFAOYSA-N": {
+    "cf_class": "Pteridines and derivatives",
+    "cf_direct_parent": "Pterins and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Pterins and derivatives",
+    "cf_superclass": "Organoheterocyclic compounds"
   },
   "HOKKHZGPKSLGJE-GSVOUGTGSA-N": {
     "cf_class": "Carboxylic acids and derivatives",
@@ -5053,6 +5102,13 @@
     "cf_subclass": "Indoles",
     "cf_superclass": "Organoheterocyclic compounds"
   },
+  "IBMRTYCHDPMBFN-UHFFFAOYSA-N": {
+    "cf_class": "Fatty Acyls",
+    "cf_direct_parent": "Fatty acid methyl esters",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Fatty acid esters",
+    "cf_superclass": "Lipids and lipid-like molecules"
+  },
   "IBRKLUSXDYATLG-LURJTMIESA-N": {
     "cf_class": "Tetrahydroisoquinolines",
     "cf_direct_parent": "Tetrahydroisoquinolines",
@@ -5157,6 +5213,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Fatty acyl glycosides",
     "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "IFNWESYYDINUHV-UHFFFAOYSA-N": {
+    "cf_class": "Diazinanes",
+    "cf_direct_parent": "Piperazines",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Piperazines",
+    "cf_superclass": "Organoheterocyclic compounds"
   },
   "IFRUHOOGYBRFEI-UHFFFAOYSA-N": {
     "cf_class": "Glycerolipids",
@@ -5451,6 +5514,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Terpene lactones",
     "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "IOOWDXMXZBYKLR-UHFFFAOYSA-N": {
+    "cf_class": "Azoles",
+    "cf_direct_parent": "Pyrazole carboxylic acids and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Pyrazoles",
+    "cf_superclass": "Organoheterocyclic compounds"
   },
   "IOYIWROOEYGVMH-UHFFFAOYSA-N": {
     "cf_class": "Diazanaphthalenes",
@@ -5822,6 +5892,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Triradylcglycerols",
     "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "JDHILDINMRGULE-UHFFFAOYSA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "Histidine and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
   },
   "JDJWBXPQIRDCOI-DUXPYHPUSA-N": {
     "cf_class": "Carboxylic acids and derivatives",
@@ -6815,6 +6892,13 @@
     "cf_direct_parent": "Methylpyridines",
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Methylpyridines",
+    "cf_superclass": "Organoheterocyclic compounds"
+  },
+  "KLKBCNDBOVRQIJ-UHFFFAOYSA-N": {
+    "cf_class": "Piperidines",
+    "cf_direct_parent": "Piperidinecarboxylic acids",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Piperidinecarboxylic acids and derivatives",
     "cf_superclass": "Organoheterocyclic compounds"
   },
   "KLTHQSWIRFFBRI-KOQZQRJKSA-N": {
@@ -7957,6 +8041,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": null,
     "cf_superclass": "Phenylpropanoids and polyketides"
+  },
+  "MAFQLJCYFMKEJJ-UHFFFAOYSA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "Gamma amino acids and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
   },
   "MAIRDOOJJIGWBJ-UHFFFAOYSA-N": {
     "cf_class": "Keto acids and derivatives",
@@ -9120,6 +9211,13 @@
     "cf_subclass": "Amino acids, peptides, and analogues",
     "cf_superclass": "Organic acids and derivatives"
   },
+  "NUXSIDPKKIEIMI-LURJTMIESA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "L-alpha-amino acids",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
+  },
   "NUYDBDGECBIUPJ-FJPOHGBRSA-N": {
     "cf_class": "Lactones",
     "cf_direct_parent": "Gamma butyrolactones",
@@ -10064,6 +10162,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": null,
     "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "PCOQHFLEFHSFHP-UHFFFAOYSA-N": {
+    "cf_class": "Organooxygen compounds",
+    "cf_direct_parent": "Aryl alkyl ketones",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Carbonyl compounds",
+    "cf_superclass": "Organic oxygen compounds"
   },
   "PCSKKIUURRTAEM-UHFFFAOYSA-N": {
     "cf_class": "Furans",
@@ -11024,6 +11129,13 @@
     "cf_subclass": "Furostanes and derivatives",
     "cf_superclass": "Lipids and lipid-like molecules"
   },
+  "QOGMSGDSEDXMQN-UHFFFAOYSA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "Beta amino acids and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
+  },
   "QOGPCCHEQXERHZ-UHFFFAOYSA-N": {
     "cf_class": "Furans",
     "cf_direct_parent": "Furoic acid esters",
@@ -11766,6 +11878,13 @@
     "cf_subclass": "Anilides",
     "cf_superclass": "Benzenoids"
   },
+  "RQPWVAXZWDTDPH-UHFFFAOYSA-N": {
+    "cf_class": "Organonitrogen compounds",
+    "cf_direct_parent": "Tetraalkylammonium salts",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Quaternary ammonium salts",
+    "cf_superclass": "Organic nitrogen compounds"
+  },
   "RRIQVLZDOZPJTH-UHFFFAOYSA-N": {
     "cf_class": "Organooxygen compounds",
     "cf_direct_parent": "Hydroxybenzaldehydes",
@@ -12501,6 +12620,13 @@
     "cf_subclass": "O-methylated flavonoids",
     "cf_superclass": "Phenylpropanoids and polyketides"
   },
+  "STEYNUVPFMIUOY-UHFFFAOYSA-N": {
+    "cf_class": "Piperidines",
+    "cf_direct_parent": "Piperidines",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": null,
+    "cf_superclass": "Organoheterocyclic compounds"
+  },
   "STKYPAFSDFAEPH-LURJTMIESA-N": {
     "cf_class": "Carboxylic acids and derivatives",
     "cf_direct_parent": "Dipeptides",
@@ -13081,6 +13207,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Fatty acid esters",
     "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "UJCGYTCAMOHYCG-UHFFFAOYSA-N": {
+    "cf_class": "Azoles",
+    "cf_direct_parent": "Imidazolyl carboxylic acids and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Imidazoles",
+    "cf_superclass": "Organoheterocyclic compounds"
   },
   "UJCJWIHZUHMDIT-UHFFFAOYSA-N": {
     "cf_class": "Glycerophospholipids",
@@ -13747,6 +13880,13 @@
     "cf_subclass": "Amines",
     "cf_superclass": "Organic nitrogen compounds"
   },
+  "VHYUNSUGCNKWSO-UHFFFAOYSA-N": {
+    "cf_class": "Organooxygen compounds",
+    "cf_direct_parent": "Dialkyl ethers",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Ethers",
+    "cf_superclass": "Organic oxygen compounds"
+  },
   "VIHRKOVEWCGJQP-UHFFFAOYSA-N": {
     "cf_class": "Carboxylic acids and derivatives",
     "cf_direct_parent": "Dicarboxylic acids and derivatives",
@@ -14138,6 +14278,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Carbonyl compounds",
     "cf_superclass": "Organic oxygen compounds"
+  },
+  "WCJNJOOLQWJKLU-UHFFFAOYSA-N": {
+    "cf_class": "Diazinanes",
+    "cf_direct_parent": "N-alkylpiperazines",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Piperazines",
+    "cf_superclass": "Organoheterocyclic compounds"
   },
   "WCPGNFONICRLCL-UHFFFAOYSA-N": {
     "cf_class": "Phenol ethers",
@@ -14999,6 +15146,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Amino acids, peptides, and analogues",
     "cf_superclass": "Organic acids and derivatives"
+  },
+  "XHMFMSVBWJZLBF-UHFFFAOYSA-N": {
+    "cf_class": "Fatty Acyls",
+    "cf_direct_parent": "Fatty acid esters",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Fatty acid esters",
+    "cf_superclass": "Lipids and lipid-like molecules"
   },
   "XIGSAGMEBXLVJJ-UHFFFAOYSA-N": {
     "cf_class": "Carboxylic acids and derivatives",
@@ -16084,6 +16238,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Alcohols and polyols",
     "cf_superclass": "Organic oxygen compounds"
+  },
+  "YXMMTUJDQTVJEN-WDSKDSINSA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "Isoleucine and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
   },
   "YXOCLCSKJXZFDE-UHFFFAOYSA-N": {
     "cf_class": "Glycerolipids",

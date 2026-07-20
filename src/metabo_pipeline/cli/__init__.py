@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import typer
 
+from .bioactivity_cmd import bioactivity
 from .classify_cmd import classify, classify_check
 from .final_cmd import final
 from .merge_cmd import merge
@@ -24,5 +25,6 @@ app.command("classify-check")(classify_check)
 app.command()(sirius)
 app.command("sirius-collect")(sirius_collect)
 app.command()(final)
+app.command()(bioactivity)
 
 __all__ = ["app"]
