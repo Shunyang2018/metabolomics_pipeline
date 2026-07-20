@@ -31,22 +31,27 @@ def count_msms_ions(msms: str) -> int:
 # column designated a blank-equivalent (e.g. a resuspension/solvent control).
 _BLANK_LIKE_TOKENS = {"blank", "mb", "resuspension"}
 
-# Tokens that exclude a column from QC entirely — neither a real sample nor
-# part of the blank baseline (e.g. identification/reference runs).
-_EXCLUDED_TOKENS = {"pool", "qc", "ident"}
 
-
-def build_group_cols(sample_cols: List[str]) -> Dict[str, List[str]]:
+def build_group_cols(
+    sample_cols: List[str], real_sample_tokens: "set[str] | None" = None
+) -> Dict[str, List[str]]:
     """Group real-sample columns for blank-fold QC.
 
-    Naming-convention agnostic: each distinct normalized sample name is its
-    own group (a trailing number is treated as part of the sample's identity,
-    e.g. `crude_1_amide` and `crude_2_amide` are different samples, not
-    replicates of one condition — grouping never assumes otherwise). Only
-    columns that repeat the exact same normalized name (e.g. the same sample
-    run in both polarities) share a group. Blank-like columns (see
-    `_BLANK_LIKE_TOKENS`) and excluded columns (see `_EXCLUDED_TOKENS`) never
-    form a group — the former feed the blank baseline instead.
+    Each distinct normalized sample name is its own group (a trailing number
+    is treated as part of the sample's identity, e.g. `crude_1_amide` and
+    `crude_2_amide` are different samples, not replicates of one condition —
+    grouping never assumes otherwise). Blank-like columns (see
+    `_BLANK_LIKE_TOKENS`: blank, method-blank, resuspension/solvent control)
+    never form a group — they feed the blank baseline instead.
+
+    `real_sample_tokens`, when given (see `constants.REAL_SAMPLE_TOKENS`), is
+    a whitelist: only columns containing at least one of these tokens count
+    as a real sample group. Everything else — identification/reference runs,
+    QC pool injections, MS1-only injections, or any other column that isn't
+    a recognized real-sample or blank-like type — is excluded from QC
+    entirely rather than silently forming its own group. When `None`, every
+    non-blank-like column is treated as a real sample group (the permissive
+    default, for datasets that haven't defined an explicit whitelist).
     """
     import re
 
@@ -55,7 +60,9 @@ def build_group_cols(sample_cols: List[str]) -> Dict[str, List[str]]:
         tokens = [t for t in re.split(r"[^a-z0-9]+", c.lower()) if t]
         if not tokens:
             continue
-        if _BLANK_LIKE_TOKENS.intersection(tokens) or _EXCLUDED_TOKENS.intersection(tokens):
+        if _BLANK_LIKE_TOKENS.intersection(tokens):
+            continue
+        if real_sample_tokens is not None and not real_sample_tokens.intersection(tokens):
             continue
         group_cols.setdefault(c.lower(), []).append(c)
     return group_cols

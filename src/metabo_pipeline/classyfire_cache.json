@@ -10954,6 +10954,13 @@
     "cf_subclass": "Amino acids, peptides, and analogues",
     "cf_superclass": "Organic acids and derivatives"
   },
+  "QEOAMNGZTSERJN-IJYBVRAASA-N": {
+    "cf_class": "Fatty Acyls",
+    "cf_direct_parent": "Medium-chain fatty acids",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Fatty acids and conjugates",
+    "cf_superclass": "Lipids and lipid-like molecules"
+  },
   "QEWSBKDMGYPSBU-UHFFFAOYSA-N": {
     "cf_class": "Coumarans",
     "cf_direct_parent": "Coumarans",
@@ -11822,6 +11829,13 @@
     "cf_subclass": "Tricarboxylic acids and derivatives",
     "cf_superclass": "Organic acids and derivatives"
   },
+  "RKIDALSACBQVTN-HHHXNRCGSA-N": {
+    "cf_class": "Glycerophospholipids",
+    "cf_direct_parent": "Phosphatidylcholines",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Glycerophosphocholines",
+    "cf_superclass": "Lipids and lipid-like molecules"
+  },
   "RKKPUBAAIGFXOG-YTXTXJHMSA-N": {
     "cf_class": "Benzene and substituted derivatives",
     "cf_direct_parent": "Xylenols",
@@ -12501,6 +12515,13 @@
     "cf_subclass": "Glycerophosphocholines",
     "cf_superclass": "Lipids and lipid-like molecules"
   },
+  "SNPLKNRPJHDVJA-UHFFFAOYSA-N": {
+    "cf_class": "Fatty Acyls",
+    "cf_direct_parent": "N-acyl amines",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Fatty amides",
+    "cf_superclass": "Lipids and lipid-like molecules"
+  },
   "SNTQPLDRUZOSDP-UHFFFAOYSA-N": {
     "cf_class": "Benzene and substituted derivatives",
     "cf_direct_parent": "Diphenylmethanes",
@@ -12949,6 +12970,13 @@
     "cf_subclass": "Amino acids, peptides, and analogues",
     "cf_superclass": "Organic acids and derivatives"
   },
+  "TWBYWOBDOCUKOW-UHFFFAOYSA-N": {
+    "cf_class": "Pyridines and derivatives",
+    "cf_direct_parent": "Pyridinecarboxylic acids",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Pyridinecarboxylic acids and derivatives",
+    "cf_superclass": "Organoheterocyclic compounds"
+  },
   "TWJCMQZMAPGUSG-UHFFFAOYSA-N": {
     "cf_class": "Glycerolipids",
     "cf_direct_parent": "Triacylglycerols",
@@ -13109,6 +13137,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Purine ribonucleotides",
     "cf_superclass": "Nucleosides, nucleotides, and analogues"
+  },
+  "UDOJNGPPRYJMKR-UHFFFAOYSA-N": {
+    "cf_class": "Organooxygen compounds",
+    "cf_direct_parent": "Secondary alcohols",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Alcohols and polyols",
+    "cf_superclass": "Organic oxygen compounds"
   },
   "UDSPSVYQMDLOHD-UHFFFAOYSA-N": {
     "cf_class": "Glycerolipids",
@@ -13747,6 +13782,20 @@
     "cf_subclass": "Purines and purine derivatives",
     "cf_superclass": "Organoheterocyclic compounds"
   },
+  "UYZSNVLEDLCWGU-UHFFFAOYSA-N": {
+    "cf_class": "Fatty Acyls",
+    "cf_direct_parent": "Straight chain fatty acids",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Fatty acids and conjugates",
+    "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "UZCXPYDBYUEZCV-UHFFFAOYSA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "Beta amino acids and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
+  },
   "UZLUKKZKKILEFL-ZJKHXSAOSA-N": {
     "cf_class": "Cinnamic acids and derivatives",
     "cf_direct_parent": "Cinnamic acid esters",
@@ -14166,6 +14215,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Fatty amides",
     "cf_superclass": "Lipids and lipid-like molecules"
+  },
+  "VQUPQWGKORWZII-WDPYGAQVSA-N": {
+    "cf_class": "Flavonoids",
+    "cf_direct_parent": "Flavonoid-3-O-glycosides",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Flavonoid glycosides",
+    "cf_superclass": "Phenylpropanoids and polyketides"
   },
   "VRNJCYVHZFLRBV-UHFFFAOYSA-N": {
     "cf_class": "Glycerophospholipids",
@@ -15154,6 +15210,13 @@
     "cf_subclass": "Naphthalenecarboxylic acids and derivatives",
     "cf_superclass": "Benzenoids"
   },
+  "XEAQIWGXBXCYFX-GUOLPTJISA-N": {
+    "cf_class": "Kavalactones",
+    "cf_direct_parent": "Kavalactones",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": null,
+    "cf_superclass": "Phenylpropanoids and polyketides"
+  },
   "XEBKSQSGNGRGDW-CJWPDFJNSA-N": {
     "cf_class": "Fatty Acyls",
     "cf_direct_parent": "Long-chain fatty acids",
@@ -15223,6 +15286,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Biflavonoids and polyflavonoids",
     "cf_superclass": "Phenylpropanoids and polyketides"
+  },
+  "XFZZZOMHBHBURH-UHFFFAOYSA-N": {
+    "cf_class": "Carboxylic acids and derivatives",
+    "cf_direct_parent": "Gamma amino acids and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Amino acids, peptides, and analogues",
+    "cf_superclass": "Organic acids and derivatives"
   },
   "XGILAAMKEQUXLS-UHFFFAOYSA-N": {
     "cf_class": "Indoles and derivatives",
@@ -15776,6 +15846,13 @@
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Organic nitro compounds",
     "cf_superclass": "Organic 1,3-dipolar compounds"
+  },
+  "YAGBSNMZQKEFCO-UHFFFAOYSA-N": {
+    "cf_class": "Benzene and substituted derivatives",
+    "cf_direct_parent": "Amphetamines and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Phenethylamines",
+    "cf_superclass": "Benzenoids"
   },
   "YALNUENQHAQXEA-UHFFFAOYSA-N": {
     "cf_class": "Benzene and substituted derivatives",
@@ -16447,6 +16524,13 @@
     "cf_direct_parent": "Pyrazolo[1,5-a]pyrimidines",
     "cf_kingdom": "Organic compounds",
     "cf_subclass": "Pyrazolo[1,5-a]pyrimidines",
+    "cf_superclass": "Organoheterocyclic compounds"
+  },
+  "ZCKYOWGFRHAZIQ-UHFFFAOYSA-N": {
+    "cf_class": "Azoles",
+    "cf_direct_parent": "Imidazolyl carboxylic acids and derivatives",
+    "cf_kingdom": "Organic compounds",
+    "cf_subclass": "Imidazoles",
     "cf_superclass": "Organoheterocyclic compounds"
   },
   "ZDACRNZBFJOLTC-UHFFFAOYSA-N": {

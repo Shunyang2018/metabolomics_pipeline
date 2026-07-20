@@ -14,6 +14,7 @@ from .constants import (
     DEDUP_RT_WINDOW_MIN,
     MSMS_MIN_IONS,
     PRESENT_PERCENT_MIN,
+    REAL_SAMPLE_TOKENS,
     SNR_MIN,
 )
 from .dedup import l3_representatives
@@ -110,7 +111,7 @@ def merge_folder_to_wide_csv(
 
         # Per-group QC metrics and gating
         blank_col = "blank" if "blank" in feat_df.columns else None
-        group_cols = build_group_cols(norm_sample_cols)
+        group_cols = build_group_cols(norm_sample_cols, real_sample_tokens=REAL_SAMPLE_TOKENS)
         feat_df = compute_group_metrics(feat_df, group_cols, blank_col)
         mask = pass_any_mask(
             feat_df, group_cols, BLANK_FOLD_MIN, PRESENT_PERCENT_MIN, CV_PERCENT_MAX

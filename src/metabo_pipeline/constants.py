@@ -44,6 +44,17 @@ CV_PERCENT_MAX: float | None = None
 Set to None to disable CV filtering.
 If set to a value (e.g., 30.0), features with CV > this value are filtered out."""
 
+REAL_SAMPLE_TOKENS: set[str] | None = {"crude", "mcx"}
+"""Whitelist of sample-name tokens that count as a real per-sample QC group.
+Only normalized sample columns containing at least one of these tokens are
+evaluated for blank-fold QC; every other non-blank-like column (e.g.
+identification/reference runs, QC pool injections, MS1-only injections) is
+excluded from QC entirely rather than silently becoming its own group.
+Set to None to fall back to the permissive default: any column that isn't
+blank-like (see `_BLANK_LIKE_TOKENS` in qc.py) becomes its own real-sample
+group. Update this set to match your dataset's real sample-type vocabulary
+(e.g. add extraction methods, treatment names) before merging a new project."""
+
 # =============================================================================
 # LEVEL 3 DEDUPLICATION FOR SIRIUS EXPORT
 # =============================================================================
