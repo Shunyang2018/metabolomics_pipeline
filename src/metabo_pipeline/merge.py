@@ -56,10 +56,17 @@ def merge_folder_to_wide_csv(
 
     frames: List[pd.DataFrame] = []
     for p in files:
-        # Read with header row at line 5 (0-based index 4)
-        df = pd.read_csv(p, header=4, encoding="utf-8-sig")
+        # Read with header row at line 5 (0-based index 4); MS-DIAL .txt is tab-delimited.
+        if p.suffix.lower() == ".txt":
+            df = pd.read_csv(p, header=4, encoding="utf-8-sig", sep="\t")
+        else:
+            df = pd.read_csv(p, header=4, encoding="utf-8-sig")
 
         cols = list(df.columns)
+        if "Alignment ID" not in cols or "MS/MS spectrum" not in cols:
+            # Skip non-MS-DIAL tables (e.g., GCMS exports) in mixed folders.
+            print(f"Skipping non-MS-DIAL file: {p.name}")
+            continue
         last_meta_col = (
             cols.index("MS/MS spectrum")
             if "MS/MS spectrum" in cols

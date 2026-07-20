@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import shutil
 import subprocess
+import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
@@ -15,6 +17,22 @@ from ..merge import merge_folder_to_wide_csv
 from ..sirius_collect import collect_sirius_results
 
 log = get_logger()
+
+
+def _get_metabo_executable() -> str:
+    """Resolve the current metabo executable path for subprocess calls."""
+    candidates = []
+    try:
+        candidates.append(Path(sys.argv[0]).resolve())
+    except Exception:
+        pass
+    which = shutil.which("metabo")
+    if which:
+        candidates.append(Path(which))
+    for c in candidates:
+        if c and c.exists():
+            return str(c)
+    return "metabo"
 
 
 def _run_classify_task(csv_path: str, output_dir: str):
@@ -47,8 +65,9 @@ def _run_classify_task(csv_path: str, output_dir: str):
 def _run_sirius_task(output_dir: str):
     """Run SIRIUS analysis task."""
     log.info("  → Starting SIRIUS analysis...")
+    metabo_exe = _get_metabo_executable()
     result = subprocess.run(
-        ["metabo", "sirius", "--output-dir", output_dir],
+        [metabo_exe, "sirius", "--output-dir", output_dir],
         capture_output=True,
         text=True,
     )

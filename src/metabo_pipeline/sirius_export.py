@@ -40,8 +40,13 @@ def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
         ms1 = parse_spectrum(r.get("MS1 isotopic spectrum", ""))
         ms2 = parse_spectrum(r.get("MS/MS spectrum", ""))
 
-        # Compose a readable compound name; mandatory in .ms
-        comp_name = str(r.get("Metabolite name") or "").strip() or f"Unknown_{fid}"
+        # Compose a readable compound name; append feature_id so SIRIUS summaries can map back.
+        base_name = str(r.get("Metabolite name") or "").strip() or "Unknown"
+        comp_name = (
+            base_name
+            if str(base_name).endswith(f"_{fid}")
+            else f"{base_name}_{fid}"
+        )
 
         block: List[str] = []
         block.append(f">compound\t{comp_name}")
@@ -115,11 +120,13 @@ def export_tsv_summaries(
 
     cmd = [
         sirius_exe,
-        "--input",
+        "--project",
         str(sirius_db),
-        "write-summaries",
+        "summaries",
         "--output",
         str(output_dir),
+        "--format",
+        "TSV",
     ]
 
     try:

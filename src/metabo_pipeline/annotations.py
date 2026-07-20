@@ -43,5 +43,9 @@ def assign_annotation_level_row(row: pd.Series) -> str:
 def annotate_levels(df: pd.DataFrame) -> pd.DataFrame:
     """Annotate an entire dataframe with MS-DIAL level calls."""
     df = df.copy()
+    # Avoid pandas apply edge-case on empty frames (can return empty DataFrame)
+    if df.empty:
+        df["annotation_level"] = pd.Series([], dtype=str)
+        return df
     df["annotation_level"] = df.apply(assign_annotation_level_row, axis=1)
     return df
