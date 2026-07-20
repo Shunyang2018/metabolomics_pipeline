@@ -47,5 +47,8 @@ def parse_spectrum(cell: str) -> List[Tuple[float, float]]:
         if ":" not in tok:
             continue
         a, b = tok.split(":", 1)
-        out.append((float(a), float(b)))
+        try:
+            out.append((float(a), float(b)))
+        except ValueError:
+            continue
     return out
