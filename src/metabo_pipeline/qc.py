@@ -26,22 +26,38 @@ def count_msms_ions(msms: str) -> int:
     return cnt
 
 
+# Tokens that mark a column as belonging to the blank baseline rather than a
+# real sample under test: explicit blanks, method blanks ('mb'), and any
+# column designated a blank-equivalent (e.g. a resuspension/solvent control).
+_BLANK_LIKE_TOKENS = {"blank", "mb", "resuspension"}
+
+# Tokens that exclude a column from QC entirely — neither a real sample nor
+# part of the blank baseline (e.g. identification/reference runs).
+_EXCLUDED_TOKENS = {"pool", "qc", "ident"}
+
+
 def build_group_cols(sample_cols: List[str]) -> Dict[str, List[str]]:
-    """Group replicate sample columns by their normalized identifier."""
+    """Group real-sample columns for blank-fold QC.
+
+    Naming-convention agnostic: each distinct normalized sample name is its
+    own group (a trailing number is treated as part of the sample's identity,
+    e.g. `crude_1_amide` and `crude_2_amide` are different samples, not
+    replicates of one condition — grouping never assumes otherwise). Only
+    columns that repeat the exact same normalized name (e.g. the same sample
+    run in both polarities) share a group. Blank-like columns (see
+    `_BLANK_LIKE_TOKENS`) and excluded columns (see `_EXCLUDED_TOKENS`) never
+    form a group — the former feed the blank baseline instead.
+    """
     import re
 
     group_cols: Dict[str, List[str]] = {}
-    pat = re.compile(r"^m2_([a-z0-9]+)_(.+)$")
     for c in sample_cols:
-        if c == "blank":
+        tokens = [t for t in re.split(r"[^a-z0-9]+", c.lower()) if t]
+        if not tokens:
             continue
-        m = pat.match(c)
-        if not m:
+        if _BLANK_LIKE_TOKENS.intersection(tokens) or _EXCLUDED_TOKENS.intersection(tokens):
             continue
-        grp = m.group(1)
-        if grp in ("pool", "qc"):
-            continue
-        group_cols.setdefault(grp, []).append(c)
+        group_cols.setdefault(c.lower(), []).append(c)
     return group_cols
 
 
@@ -51,7 +67,9 @@ def compute_group_metrics(
     """Compute blank fold, presence, and CV metrics per replicate group."""
     df = df.copy()
 
-    # Gather blank columns (explicit 'blank' plus any column whose token equals 'blank').
+    # Gather blank columns: explicit 'blank', plus any column tokenized as
+    # blank-like (see `_BLANK_LIKE_TOKENS` — blank, method-blank, resuspension/
+    # solvent controls).
     blank_cols: List[str] = []
     if blank_col is not None and blank_col in df.columns:
         blank_cols.append(blank_col)
@@ -59,7 +77,7 @@ def compute_group_metrics(
         if col == blank_col:
             continue
         tokens = [tok for tok in str(col).lower().replace("-", "_").split("_") if tok]
-        if "blank" in tokens:
+        if _BLANK_LIKE_TOKENS.intersection(tokens):
             blank_cols.append(col)
 
     blank_values = None
@@ -133,6 +151,13 @@ def pass_any_mask(
         mask = mask.fillna(False)
         passes.append(mask)
     if not passes:
+        import warnings
+
+        warnings.warn(
+            "No replicate groups were recognized for blank-fold QC; "
+            "every row will pass unfiltered. Check your sample column naming.",
+            stacklevel=2,
+        )
         return pd.Series([True] * len(df), index=df.index)
     m = passes[0]
     for other in passes[1:]:
