@@ -2,22 +2,23 @@ from __future__ import annotations
 
 import pandas as pd
 
+from .utils import clean_metabolite_name
+
 
 def _to_float(val) -> float:
     """Coerce a value to float, returning NaN for blank/non-numeric input."""
     return pd.to_numeric(val, errors="coerce")
 
 
+#: Metabolite-name prefixes MS-DIAL uses to mean "not identified".
+_UNIDENTIFIED_NAME_PREFIXES = ("unknown", "low score", "no ms2")
+
+
 def assign_annotation_level_row(row: pd.Series) -> str:
     """Infer an annotation level for a single MS-DIAL row."""
-    name = str(row.get("Metabolite name", "")).strip()
+    name = clean_metabolite_name(row.get("Metabolite name", ""))
     lname = name.lower()
-    if (
-        (not name)
-        or lname.startswith("unknown")
-        or lname.startswith("low score")
-        or lname.startswith("no ms2")
-    ):
+    if (not name) or lname.startswith(_UNIDENTIFIED_NAME_PREFIXES):
         return "3"
 
     wdot = _to_float(row.get("Weighted dot product"))

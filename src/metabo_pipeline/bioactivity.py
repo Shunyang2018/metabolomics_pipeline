@@ -10,7 +10,6 @@ isotope layer differs slightly from the reference entry.
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Dict, List, Optional
 
 import pandas as pd
 
@@ -65,7 +64,7 @@ _METRIC_PREFIXES = ("blank_fold_", "present_percent_", "cv_percent_", "pass_", "
 _METRIC_EXACT = {"pass_any_groups", "_polarity", "_rt", "_mz", "_sn", "_wd"}
 
 
-def inchikey_block1(value) -> Optional[str]:
+def inchikey_block1(value) -> str | None:
     """Return the first (skeleton) block of an InChIKey, or None if blank/invalid."""
     s = str(value or "").strip().upper()
     if not s or s == "NAN":
@@ -73,7 +72,7 @@ def inchikey_block1(value) -> Optional[str]:
     return s.split("-")[0] or None
 
 
-def identify_sample_columns(columns: List[str]) -> List[str]:
+def identify_sample_columns(columns: list[str]) -> list[str]:
     """Return the subset of columns that hold per-sample intensities."""
     return [
         c
@@ -90,7 +89,7 @@ def match_bioactives(
     output_csv: Path,
     inchikey_col: str = "INCHIKEY",
     db_inchikey_col: str = "InChIKey",
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Match msdial features to a bioactivity database on InChIKey skeleton.
 
     Emits one row per (feature, sample it was detected in, bioactivity hit).
@@ -138,9 +137,7 @@ def match_bioactives(
     long_df["intensity"] = pd.to_numeric(long_df["intensity"], errors="coerce")
     long_df = long_df[long_df["intensity"].fillna(0) > 0]
 
-    out = long_df.merge(
-        matched_db, on="_ikey_block1", how="inner", suffixes=("", "_bioactivity")
-    )
+    out = long_df.merge(matched_db, on="_ikey_block1", how="inner", suffixes=("", "_bioactivity"))
     out = out.drop(columns=["_ikey_block1"])
 
     output_csv.parent.mkdir(parents=True, exist_ok=True)

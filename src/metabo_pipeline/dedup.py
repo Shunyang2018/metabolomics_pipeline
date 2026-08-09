@@ -1,14 +1,10 @@
 from __future__ import annotations
 
-from typing import List, Tuple
-
 import numpy as np
 import pandas as pd
 
 
-def l3_representatives(
-    df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float
-) -> pd.DataFrame:
+def l3_representatives(df_l3: pd.DataFrame, rt_window_min: float, mz_ppm: float) -> pd.DataFrame:
     """Return representative L3 rows using global clustering within (chrom, polarity).
 
     - Window: |ΔRT| <= rt_window_min; |Δm/z| <= mz_ppm (ppm) relative to cluster representative
@@ -24,23 +20,21 @@ def l3_representatives(
         )
     # Polarity derives from filename-inferred mode (POS/NEG/UNK)
     work["_polarity"] = work["mode"].astype(str).str.upper()
-    work["_polarity"] = work["_polarity"].where(
-        work["_polarity"].isin({"POS", "NEG"}), "UNK"
-    )
+    work["_polarity"] = work["_polarity"].where(work["_polarity"].isin({"POS", "NEG"}), "UNK")
     work["_rt"] = pd.to_numeric(work.get("Average Rt(min)"), errors="coerce")
     work["_mz"] = pd.to_numeric(work.get("Average Mz"), errors="coerce")
     work["_sn"] = pd.to_numeric(work.get("S/N average"), errors="coerce")
     work["_wd"] = pd.to_numeric(work.get("Weighted dot product"), errors="coerce")
 
-    keep_idx: List[int] = []
+    keep_idx: list[int] = []
     # Within each chromatographic group/polarity, cluster rows by RT/mz proximity
-    for (chrom, pol), g in work.groupby(["chrom", "_polarity"], dropna=False):
+    for (_chrom, _pol), g in work.groupby(["chrom", "_polarity"], dropna=False):
         if g.empty:
             continue
         g = g.sort_values(["_rt", "_mz"])  # deterministic
         # Single-linkage: compare to last member in the current cluster
         # cluster_rep tracks the current best representative (index, rt, mz, sn, wd)
-        cluster_rep: Tuple[int, float, float, float, float] | None = None
+        cluster_rep: tuple[int, float, float, float, float] | None = None
         last_rt = np.nan
         last_mz = np.nan
         for idx, row in g.iterrows():
@@ -54,11 +48,9 @@ def l3_representatives(
                 continue
             _, rep_rt, rep_mz, rep_sn, rep_wd = cluster_rep
             mz_tol = (mz_ppm * 1e-6) * last_mz if pd.notna(last_mz) else np.nan
-            if (
-                pd.notna(rt)
-                and pd.notna(last_rt)
-                and abs(rt - last_rt) <= rt_window_min
-            ) and (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
+            if (pd.notna(rt) and pd.notna(last_rt) and abs(rt - last_rt) <= rt_window_min) and (
+                pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol
+            ):
                 if (sn, wd) > (rep_sn, rep_wd):
                     cluster_rep = (idx, rt, mz, sn, wd)
                 # extend cluster
@@ -95,9 +87,7 @@ def dedup_name_conflicts_by_cluster(
         )
     # Same polarity tagging as in the representative selection above
     work["_polarity"] = work["mode"].astype(str).str.upper()
-    work["_polarity"] = work["_polarity"].where(
-        work["_polarity"].isin({"POS", "NEG"}), "UNK"
-    )
+    work["_polarity"] = work["_polarity"].where(work["_polarity"].isin({"POS", "NEG"}), "UNK")
     work["_rt"] = pd.to_numeric(work.get("Average Rt(min)"), errors="coerce")
     work["_mz"] = pd.to_numeric(work.get("Average Mz"), errors="coerce")
     work["_sn"] = pd.to_numeric(work.get("S/N average"), errors="coerce")
@@ -110,13 +100,13 @@ def dedup_name_conflicts_by_cluster(
     else:
         work["_cv_med"] = np.nan
 
-    picked_idx: List[int] = []
+    picked_idx: list[int] = []
     # Cluster rows within each chromatographic/polarity bucket
-    for (chrom, pol), g in work.groupby(["chrom", "_polarity"], dropna=False):
+    for (_chrom, _pol), g in work.groupby(["chrom", "_polarity"], dropna=False):
         if g.empty:
             continue
         g = g.sort_values(["_rt", "_mz"])  # deterministic
-        cluster_members: List[int] = []
+        cluster_members: list[int] = []
         # Single-linkage: compare to last member
         last_rt = np.nan
         last_mz = np.nan
@@ -129,16 +119,14 @@ def dedup_name_conflicts_by_cluster(
                 last_rt, last_mz = rt, mz
                 continue
             mz_tol = (mz_ppm * 1e-6) * last_mz if pd.notna(last_mz) else np.nan
-            if (
-                pd.notna(rt)
-                and pd.notna(last_rt)
-                and abs(rt - last_rt) <= rt_window_min
-            ) and (pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol):
+            if (pd.notna(rt) and pd.notna(last_rt) and abs(rt - last_rt) <= rt_window_min) and (
+                pd.notna(mz) and pd.notna(last_mz) and abs(mz - last_mz) <= mz_tol
+            ):
                 cluster_members.append(idx)
             else:
                 # finalize previous cluster: pick one per Metabolite name
                 sub = work.loc[cluster_members]
-                for name, subg in sub.groupby("Metabolite name", dropna=False):
+                for _name, subg in sub.groupby("Metabolite name", dropna=False):
                     subg = subg.copy()
                     subg["_cv_sort"] = subg["_cv_med"].fillna(np.inf)
                     subg = subg.sort_values(
@@ -151,12 +139,10 @@ def dedup_name_conflicts_by_cluster(
         # finalize last cluster
         if cluster_members:
             sub = work.loc[cluster_members]
-            for name, subg in sub.groupby("Metabolite name", dropna=False):
+            for _name, subg in sub.groupby("Metabolite name", dropna=False):
                 subg = subg.copy()
                 subg["_cv_sort"] = subg["_cv_med"].fillna(np.inf)
-                subg = subg.sort_values(
-                    ["_cv_sort", "_sn", "_wd"], ascending=[True, False, False]
-                )
+                subg = subg.sort_values(["_cv_sort", "_sn", "_wd"], ascending=[True, False, False])
                 picked_idx.append(subg.index[0])
 
     reps = work.loc[sorted(set(picked_idx))]

@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from typing import Dict, List
-
 import numpy as np
 import pandas as pd
 
@@ -33,8 +31,8 @@ _BLANK_LIKE_TOKENS = {"blank", "mb", "resuspension"}
 
 
 def build_group_cols(
-    sample_cols: List[str], real_sample_tokens: "set[str] | None" = None
-) -> Dict[str, List[str]]:
+    sample_cols: list[str], real_sample_tokens: set[str] | None = None
+) -> dict[str, list[str]]:
     """Group real-sample columns for blank-fold QC.
 
     Each distinct normalized sample name is its own group (a trailing number
@@ -55,7 +53,7 @@ def build_group_cols(
     """
     import re
 
-    group_cols: Dict[str, List[str]] = {}
+    group_cols: dict[str, list[str]] = {}
     for c in sample_cols:
         tokens = [t for t in re.split(r"[^a-z0-9]+", c.lower()) if t]
         if not tokens:
@@ -69,7 +67,7 @@ def build_group_cols(
 
 
 def compute_group_metrics(
-    df: pd.DataFrame, group_cols: Dict[str, List[str]], blank_col: str | None
+    df: pd.DataFrame, group_cols: dict[str, list[str]], blank_col: str | None
 ) -> pd.DataFrame:
     """Compute blank fold, presence, and CV metrics per replicate group."""
     df = df.copy()
@@ -77,7 +75,7 @@ def compute_group_metrics(
     # Gather blank columns: explicit 'blank', plus any column tokenized as
     # blank-like (see `_BLANK_LIKE_TOKENS` — blank, method-blank, resuspension/
     # solvent controls).
-    blank_cols: List[str] = []
+    blank_cols: list[str] = []
     if blank_col is not None and blank_col in df.columns:
         blank_cols.append(blank_col)
     for col in df.columns:
@@ -96,9 +94,7 @@ def compute_group_metrics(
         blank_avg = pd.Series([float("nan")] * len(df), index=df.index)
         blank_denom = blank_avg
 
-    sample_cols_all: List[str] = sorted(
-        {c for cols in group_cols.values() for c in cols}
-    )
+    sample_cols_all: list[str] = sorted({c for cols in group_cols.values() for c in cols})
     if sample_cols_all:
         sample_vals = df[sample_cols_all].apply(pd.to_numeric, errors="coerce")
         max_all_samples = sample_vals.max(axis=1, skipna=True)
@@ -129,14 +125,14 @@ def compute_group_metrics(
 
 def pass_any_mask(
     df: pd.DataFrame,
-    group_cols: Dict[str, List[str]],
+    group_cols: dict[str, list[str]],
     blank_fold_min: float,
     present_min: float,
     cv_max: float | None,
 ) -> pd.Series:
     """Determine whether each row passes any replicate-group QC criteria."""
     passes = []
-    for grp in group_cols.keys():
+    for grp in group_cols:
         bf = df.get(f"blank_fold_{grp}")
         pp = df.get(f"present_percent_{grp}")
         cv = df.get(f"cv_percent_{grp}")

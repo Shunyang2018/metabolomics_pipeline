@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -46,15 +45,13 @@ def final(
     extract_csv = str(out_dir / "sirius_identifications.csv")
     output_csv = str(out_dir / "merged_final.csv")  # Will be updated below
 
-    j: Optional[Path] = None
+    j: Path | None = None
     if join_merged and str(join_merged).strip():
         j = Path(join_merged)
         # Prefer classified output if present: <stem>_classyfire.<suffix>
         classified = j.with_name(j.stem + "_classyfire").with_suffix(j.suffix)
         if classified.exists():
-            log.info(
-                f"Detected classified table: {classified.name}; using it for merge"
-            )
+            log.info(f"Detected classified table: {classified.name}; using it for merge")
             j = classified
             output_csv = str(out_dir / "merged_classyfire_final.csv")
         else:

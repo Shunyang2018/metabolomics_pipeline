@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import re
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional
 
 import pandas as pd
 
@@ -23,10 +23,10 @@ from .sirius_export import build_ms_entries, write_ms_files
 from .utils import infer_chrom_from_name, infer_mode_from_name, normalize_sample_id_core
 
 
-def list_alignment_files(input_dir: Path, recursive: bool = False) -> List[Path]:
+def list_alignment_files(input_dir: Path, recursive: bool = False) -> list[Path]:
     """Return sorted MS-DIAL alignment files under a directory."""
     pats = ["*.csv", "*.txt"]
-    files: List[Path] = []
+    files: list[Path] = []
     if recursive:
         for p in pats:
             files.extend(input_dir.rglob(p))
@@ -40,8 +40,8 @@ def merge_folder_to_wide_csv(
     input_dir: Path,
     output_csv: Path,
     recursive: bool = False,
-    progress: Optional[Callable[[Dict[str, int]], None]] = None,
-) -> Dict[str, int]:
+    progress: Callable[[dict[str, int]], None] | None = None,
+) -> dict[str, int]:
     """Merge filtered MS-DIAL tables into a single wide-format CSV."""
     files = list_alignment_files(input_dir, recursive=recursive)
     totals = {
@@ -53,9 +53,10 @@ def merge_folder_to_wide_csv(
         "ann2": 0,
         "ann3": 0,
     }
-    per_file: List[Dict[str, int]] = []
+    per_file: list[dict[str, int]] = []
 
-    frames: List[pd.DataFrame] = []
+    frames: list[pd.DataFrame] = []
+    skipped_files: list[str] = []
     for p in files:
         # Read with header row at line 5 (0-based index 4); MS-DIAL .txt is tab-delimited.
         if p.suffix.lower() == ".txt":
@@ -67,13 +68,12 @@ def merge_folder_to_wide_csv(
         if "Alignment ID" not in cols or "MS/MS spectrum" not in cols:
             # Skip non-MS-DIAL tables (e.g., GCMS exports) in mixed folders.
             print(f"Skipping non-MS-DIAL file: {p.name}")
+            skipped_files.append(p.name)
             continue
         last_meta_col = (
             cols.index("MS/MS spectrum")
             if "MS/MS spectrum" in cols
-            else max(
-                30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30
-            )
+            else max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
         )
         sample_cols_raw = cols[last_meta_col + 1 :]
 
@@ -198,9 +198,7 @@ def merge_folder_to_wide_csv(
 
     sample_pat = re.compile(r"^m2_[a-z0-9]+_.+")
     metric_cols = sorted(
-        c
-        for c in all_cols
-        if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_"))
+        c for c in all_cols if str(c).startswith(("blank_fold_", "present_percent_", "cv_percent_"))
     )
     pass_cols = sorted(
         c
@@ -217,9 +215,7 @@ def merge_folder_to_wide_csv(
         and sample_pat.match(str(c))
     )
     other_cols = sorted(
-        c
-        for c in all_cols
-        if c not in set(id_order + sample_cols + metric_cols + pass_cols)
+        c for c in all_cols if c not in set(id_order + sample_cols + metric_cols + pass_cols)
     )
     out_cols = id_order + other_cols + sample_cols + metric_cols
     if out_cols:
@@ -260,7 +256,11 @@ def merge_folder_to_wide_csv(
     merged.to_csv(output_csv, index=False)
 
     return {
-        "files": len(files),
+        # Reported to the user as "Merged N files", so count only the MS-DIAL
+        # tables actually consumed - not the ones skipped as non-MS-DIAL.
+        "files": len(files) - len(skipped_files),
+        "files_found": len(files),
+        "files_skipped": skipped_files,
         "rows": int(len(merged)),
         "rows_pre_dedup": rows_pre,
         "dedup_dropped": rows_pre - rows_post,

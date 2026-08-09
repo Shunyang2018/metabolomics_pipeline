@@ -92,9 +92,7 @@ def _run_parallel_tasks(tasks, task_names):
 
     results = {}
     with ThreadPoolExecutor(max_workers=2) as executor:
-        future_to_task = {
-            executor.submit(_dispatch_task, task): task[0] for task in tasks
-        }
+        future_to_task = {executor.submit(_dispatch_task, task): task[0] for task in tasks}
 
         for future in as_completed(future_to_task):
             result_name, success, error = future.result()
@@ -135,14 +133,10 @@ def _create_final_merge(merged_csv: str, output_dir: str):
     log.info(f"  • Total rows: {summary['rows']}")
 
     # Show SIRIUS statistics
-    log.info(
-        f"  • SIRIUS compounds: {summary.get('n_pos', 0)} POS, {summary.get('n_neg', 0)} NEG"
-    )
+    log.info(f"  • SIRIUS compounds: {summary.get('n_pos', 0)} POS, {summary.get('n_neg', 0)} NEG")
 
     # Show annotation level distribution after SIRIUS
-    ann_counts = summary.get("ann_after", {}) or summary.get(
-        "annotation_level_counts", {}
-    )
+    ann_counts = summary.get("ann_after", {}) or summary.get("annotation_level_counts", {})
     if ann_counts:
         log.info("  • Final annotation levels:")
         log.info(f"      L1: {ann_counts.get('1', 0)} (MS-DIAL library hits)")
@@ -184,17 +178,11 @@ def run(
         None,
         help="Input directory with MS-DIAL files (default: INPUT_DIR from constants.py)",
     ),
-    output_dir: str = typer.Option(
-        None, help="Output directory (default: INPUT_DIR/outputs)"
-    ),
-    skip_merge: bool = typer.Option(
-        False, help="Skip merge step (use existing merged.csv)"
-    ),
+    output_dir: str = typer.Option(None, help="Output directory (default: INPUT_DIR/outputs)"),
+    skip_merge: bool = typer.Option(False, help="Skip merge step (use existing merged.csv)"),
     skip_classify: bool = typer.Option(False, help="Skip ClassyFire classification"),
     skip_sirius: bool = typer.Option(False, help="Skip SIRIUS analysis"),
-    skip_bioactivity: bool = typer.Option(
-        False, help="Skip bioactivity database matching"
-    ),
+    skip_bioactivity: bool = typer.Option(False, help="Skip bioactivity database matching"),
     bioactivity_db: str = typer.Option(
         None, help="Path to bioactivity database CSV (default: constants.BIOACTIVITY_DB_PATH)"
     ),
@@ -231,9 +219,7 @@ def run(
             recursive=False,
         )
         log.ok(f"✓ Merge complete: {merged_csv}")
-        log.info(
-            f"  • {summary['rows']} features across {summary.get('n_samples', 'N/A')} samples"
-        )
+        log.info(f"  • {summary['rows']} features across {summary.get('n_samples', 'N/A')} samples")
         log.info(f"  • Files merged: {summary.get('n_files_merged', 'N/A')}")
 
         # Show annotation level distribution
@@ -293,9 +279,7 @@ def run(
     log.info("=" * 60)
 
     # Determine final output filename
-    final_name = (
-        "merged_classyfire_final.csv" if not skip_classify else "merged_final.csv"
-    )
+    final_name = "merged_classyfire_final.csv" if not skip_classify else "merged_final.csv"
     log.info(f"📁 Final output: {output_dir}/{final_name}")
     if not skip_bioactivity:
         log.info(f"📁 Bioactivity matches: {output_dir}/bioactives.csv")

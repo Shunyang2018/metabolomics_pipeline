@@ -1,8 +1,8 @@
 from __future__ import annotations
 
 import csv
+from collections.abc import Callable
 from pathlib import Path
-from typing import Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 
@@ -30,15 +30,13 @@ def _detect_sirius_format(sirius_path: Path) -> str:
 
     # Check for V5 compound directories (numbered folders)
     subdirs = [p for p in sirius_path.iterdir() if p.is_dir()]
-    if subdirs and any(
-        (p / "spectrum.ms").exists() for p in subdirs[:10]
-    ):  # Check first 10
+    if subdirs and any((p / "spectrum.ms").exists() for p in subdirs[:10]):  # Check first 10
         return "v5"
 
     return "unknown"
 
 
-def _extract_feature_id_from_v6_mapping(mapping_feature_id: str) -> Optional[int]:
+def _extract_feature_id_from_v6_mapping(mapping_feature_id: str) -> int | None:
     """
     Extract numeric feature ID from SIRIUS 6 mappingFeatureId.
 
@@ -66,7 +64,7 @@ def _extract_feature_id_from_v6_mapping(mapping_feature_id: str) -> Optional[int
     return None
 
 
-def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
+def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> list[dict]:
     """
     Parse SIRIUS 6 TSV summary files.
 
@@ -128,9 +126,7 @@ def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
         canopus_formula_df = None
         if canopus_formula_file.exists():
             try:
-                canopus_formula_df = pd.read_csv(
-                    canopus_formula_file, sep="\t", low_memory=False
-                )
+                canopus_formula_df = pd.read_csv(canopus_formula_file, sep="\t", low_memory=False)
                 if "formulaRank" in canopus_formula_df.columns:
                     canopus_formula_df = canopus_formula_df[
                         canopus_formula_df["formulaRank"] == 1
@@ -177,9 +173,7 @@ def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
                 else None
             )
             canopus_class = (
-                row.get("ClassyFire#class")
-                if pd.notna(row.get("ClassyFire#class"))
-                else None
+                row.get("ClassyFire#class") if pd.notna(row.get("ClassyFire#class")) else None
             )
             canopus_specific = (
                 row.get("ClassyFire#most specific class")
@@ -244,21 +238,15 @@ def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
         if fid is None:
             continue
 
-        has_struct = bool(pd.notna(row.get("smiles"))) and bool(
-            pd.notna(row.get("InChIkey2D"))
-        )
+        has_struct = bool(pd.notna(row.get("smiles"))) and bool(pd.notna(row.get("InChIkey2D")))
         has_formula = bool(pd.notna(row.get("molecularFormula")))
 
         # Extract CANOPUS classifications
         canopus_super = (
-            row.get("ClassyFire#superclass")
-            if pd.notna(row.get("ClassyFire#superclass"))
-            else None
+            row.get("ClassyFire#superclass") if pd.notna(row.get("ClassyFire#superclass")) else None
         )
         canopus_class = (
-            row.get("ClassyFire#class")
-            if pd.notna(row.get("ClassyFire#class"))
-            else None
+            row.get("ClassyFire#class") if pd.notna(row.get("ClassyFire#class")) else None
         )
         canopus_specific = (
             row.get("ClassyFire#most specific class")
@@ -284,10 +272,10 @@ def _parse_sirius6_tsv(sirius_dir: Path, polarity: str) -> List[Dict]:
     return results
 
 
-def _parse_feature_id_from_spectrum(spectrum_ms: Path) -> Optional[int]:
+def _parse_feature_id_from_spectrum(spectrum_ms: Path) -> int | None:
     """Extract a feature_id integer from a SIRIUS spectrum file."""
     txt = _read_text(spectrum_ms)
-    fid: Optional[int] = None
+    fid: int | None = None
     for line in txt.splitlines():
         if line.startswith("#feature_id "):
             return int(line.split()[1])
@@ -298,9 +286,9 @@ def _parse_feature_id_from_spectrum(spectrum_ms: Path) -> Optional[int]:
     return fid
 
 
-def _parse_info_from_compound(compound_info: Path) -> Dict[str, Optional[str]]:
+def _parse_info_from_compound(compound_info: Path) -> dict[str, str | None]:
     """Parse ion metadata from a compound.info file."""
-    out: Dict[str, Optional[str]] = {"ionType": None, "ionMass": None}
+    out: dict[str, str | None] = {"ionType": None, "ionMass": None}
     txt = _read_text(compound_info)
     for line in txt.splitlines():
         if "\t" not in line:
@@ -313,7 +301,21 @@ def _parse_info_from_compound(compound_info: Path) -> Dict[str, Optional[str]]:
     return out
 
 
-def _extract_canopus(comp_dir: Path) -> Dict[str, Optional[str]]:
+def _value_for_column(header: list[str], row: list[str], colname_substr: str) -> str | None:
+    """Return the value in ``row`` under the first header containing ``colname_substr``.
+
+    Matching is case-insensitive and by substring, because SIRIUS varies the
+    exact CANOPUS column names between versions. Returns None when no header
+    matches or the row is short.
+    """
+    needle = colname_substr.lower()
+    for i, h in enumerate(header):
+        if needle in h.lower():
+            return row[i] if i < len(row) else None
+    return None
+
+
+def _extract_canopus(comp_dir: Path) -> dict[str, str | None]:
     """Gather CANOPUS class annotations if present in a compound directory."""
     out = {
         "SIRIUS_canopus_superclass": None,
@@ -327,31 +329,27 @@ def _extract_canopus(comp_dir: Path) -> Dict[str, Optional[str]]:
     for tsv in can_dir.glob("*.tsv"):
         with tsv.open("r", encoding="utf-8", errors="ignore") as f:
             header = f.readline().strip().split("\t")
-            line = f.readline().strip().split("\t") if not f.closed else []
+            line = f.readline().strip().split("\t")
         if not header or not line:
             continue
 
-        def _get(colname_substr: str) -> Optional[str]:
-            for i, h in enumerate(header):
-                if colname_substr.lower() in h.lower():
-                    return line[i] if i < len(line) else None
-            return None
-
-        out["SIRIUS_canopus_superclass"] = _get("superclass")
-        out["SIRIUS_canopus_class"] = _get("class")
-        out["SIRIUS_canopus_most_specific"] = _get("most") or _get("specific")
+        out["SIRIUS_canopus_superclass"] = _value_for_column(header, line, "superclass")
+        out["SIRIUS_canopus_class"] = _value_for_column(header, line, "class")
+        out["SIRIUS_canopus_most_specific"] = _value_for_column(
+            header, line, "most"
+        ) or _value_for_column(header, line, "specific")
         # If at least one field found, stop
         if any(out.values()):
             return out
     return out
 
 
-def _pick_top_fingerid(fingerid_dir: Path) -> Optional[Dict[str, Optional[str]]]:
+def _pick_top_fingerid(fingerid_dir: Path) -> dict[str, str | None] | None:
     """Select the top-ranked CSI:FingerID hit from a result directory."""
     if not fingerid_dir.exists():
         return None
-    best: Optional[Dict[str, Optional[str]]] = None
-    best_score: Optional[float] = None
+    best: dict[str, str | None] | None = None
+    best_score: float | None = None
     for tsv in fingerid_dir.glob("*.tsv"):
         # Read minimally to avoid heavy memory use
         with tsv.open("r", encoding="utf-8", newline="") as f:
@@ -379,20 +377,20 @@ def _pick_top_fingerid(fingerid_dir: Path) -> Optional[Dict[str, Optional[str]]]
 
 
 def collect_sirius_results(
-    pos_dir: Optional[Path],
-    neg_dir: Optional[Path],
+    pos_dir: Path | None,
+    neg_dir: Path | None,
     output_csv: Path,
-    join_with_merged: Optional[Path] = None,
-    progress: Optional[Callable[[int, int, str], None]] = None,
-    extract_cache: Optional[Path] = None,
+    join_with_merged: Path | None = None,
+    progress: Callable[[int, int, str], None] | None = None,
+    extract_cache: Path | None = None,
     force_rescan: bool = False,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Aggregate SIRIUS identifications and optionally join them onto the merged table."""
-    rows: List[Dict[str, Optional[str]]] = []
+    rows: list[dict[str, str | None]] = []
     processed = 0
-    ann_counts: Optional[Dict[str, int]] = None
+    ann_counts: dict[str, int] | None = None
 
-    def _scan(root: Path, pol: str, total: int) -> Tuple[int, int]:
+    def _scan(root: Path, pol: str, total: int) -> tuple[int, int]:
         """Iterate over SIRIUS compound folders for a given polarity."""
         nonlocal processed
         n_found = n_kept = 0
@@ -419,13 +417,9 @@ def collect_sirius_results(
                         "_sirius_has_struct": False,
                         "_sirius_has_formula": has_formula,
                         "_sirius_has_canopus": has_canopus,
-                        "SIRIUS_canopus_superclass": cano.get(
-                            "SIRIUS_canopus_superclass"
-                        ),
+                        "SIRIUS_canopus_superclass": cano.get("SIRIUS_canopus_superclass"),
                         "SIRIUS_canopus_class": cano.get("SIRIUS_canopus_class"),
-                        "SIRIUS_canopus_most_specific": cano.get(
-                            "SIRIUS_canopus_most_specific"
-                        ),
+                        "SIRIUS_canopus_most_specific": cano.get("SIRIUS_canopus_most_specific"),
                     }
                 )
                 # advance progress
@@ -451,9 +445,7 @@ def collect_sirius_results(
                     # keep only the requested CANOPUS class fields as new columns
                     "SIRIUS_canopus_superclass": cano.get("SIRIUS_canopus_superclass"),
                     "SIRIUS_canopus_class": cano.get("SIRIUS_canopus_class"),
-                    "SIRIUS_canopus_most_specific": cano.get(
-                        "SIRIUS_canopus_most_specific"
-                    ),
+                    "SIRIUS_canopus_most_specific": cano.get("SIRIUS_canopus_most_specific"),
                 }
             )
             processed += 1
@@ -542,9 +534,9 @@ def collect_sirius_results(
                     ik_col = c
                     break
             if smiles_col and ik_col:
-                df["_sirius_has_struct"] = df[smiles_col].astype(str).str.len().gt(
-                    0
-                ) & df[ik_col].astype(str).str.len().gt(0)
+                df["_sirius_has_struct"] = df[smiles_col].astype(str).str.len().gt(0) & df[
+                    ik_col
+                ].astype(str).str.len().gt(0)
         if "_sirius_has_formula" not in df.columns:
             form_col = None
             for c in ("formula", "molecularFormula", "SIRIUS_formula"):

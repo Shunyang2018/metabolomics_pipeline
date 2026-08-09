@@ -4,12 +4,11 @@ import os
 import platform
 import shutil
 from pathlib import Path
-from typing import List, Optional, Tuple
 
 
-def _collect_default_candidates(system: str, exe_name: str) -> List[Tuple[str, str]]:
+def _collect_default_candidates(system: str, exe_name: str) -> list[tuple[str, str]]:
     """Enumerate platform-specific fallback paths for the SIRIUS executable."""
-    candidates: List[Tuple[str, str]] = []
+    candidates: list[tuple[str, str]] = []
     # Shared environment hints
     sirius_home = os.environ.get("SIRIUS_HOME")
     if sirius_home:
@@ -61,17 +60,17 @@ def _collect_default_candidates(system: str, exe_name: str) -> List[Tuple[str, s
 
 
 def guess_sirius_executable(
-    preferred: Optional[str] = None,
-) -> Tuple[str, Optional[str]]:
+    preferred: str | None = None,
+) -> tuple[str, str | None]:
     """Return a likely path to the SIRIUS executable and a note describing the source."""
     system = platform.system()
     exe_name = "sirius.exe" if system == "Windows" else "sirius"
     base = preferred or exe_name
 
-    candidates: List[Tuple[str, str]] = []
+    candidates: list[tuple[str, str]] = []
     seen: set[str] = set()
 
-    def add(path: Optional[str], note: str) -> None:
+    def add(path: str | None, note: str) -> None:
         if not path:
             return
         norm = str(Path(path).expanduser())

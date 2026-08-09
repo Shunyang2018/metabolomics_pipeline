@@ -48,12 +48,10 @@ def merge(
                 f"S/N={rec.get('after_snr')}, pass_any={rec.get('after_pass')}"
             )
 
-        summary = merge_folder_to_wide_csv(
-            in_dir, out, recursive=recursive, progress=_progress
-        )
+        summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive, progress=_progress)
     except Exception as e:
         log.error(f"Failed to merge files from {in_dir}: {e}")
-        raise typer.Exit(code=1)
+        raise typer.Exit(code=1) from e
 
     log.ok(f"Merged {summary['files']} files → {out}")
     # Print stats if available (wide mode)

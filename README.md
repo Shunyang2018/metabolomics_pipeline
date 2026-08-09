@@ -1,13 +1,16 @@
 # Metabolomics Pipeline (MS-DIAL Post-Processing)
 
-Cross-platform (Windows/macOS) pipeline to parse MS-DIAL alignment outputs, apply basic QC filtering, harmonize sample columns, and export a merged matrix. The merge step also prepares SIRIUS input files for Level 3 unknowns.
+[![CI](https://github.com/Shunyang2018/metabolomics_pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Shunyang2018/metabolomics_pipeline/actions/workflows/ci.yml)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
+[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+
+Cross-platform (Windows/macOS/Linux) pipeline to parse MS-DIAL alignment outputs, apply QC filtering, harmonize sample columns, and export a merged matrix. The merge step also prepares SIRIUS input files for Level 3 unknowns, and results from SIRIUS and ClassyFire are joined back into a single annotated table.
 
 ## Status
-- Typer-based CLI available with validate, merge, SIRIUS integration, and ClassyFire classification.
+- Typer-based CLI with validate, merge, SIRIUS integration, ClassyFire classification, and bioactivity matching.
 - SIRIUS integration: exports `.ms` inputs from Level 3 unknowns and can drive SIRIUS runs via `metabo sirius`.
-- Configuration: All settings centralized in `src/metabo_pipeline/constants.py` (no config YAML files needed).
-- Testing: Comprehensive test suite with unit and integration tests.
-- See `PLAN.md` for the roadmap and milestones.
+- Configuration: thresholds centralized in `src/metabo_pipeline/constants.py`; SIRIUS task settings in `configs/sirius.yml`.
+- Tested: unit tests over the QC, annotation-level, merge, dedup, SIRIUS-export, and bioactivity logic. Run with `pytest`.
 
 ## Quickstart
 
@@ -224,13 +227,52 @@ SIRIUS merge behavior
 - Notes:
   - Default timeout: 15s; adjust pacing with `--sleep-sec`, retries with `--retries`.
   - `--join-merged` adds `cf_*` columns into the table (inserted after `SMILES` when present). Keep your input safe by writing to a new path or accept the derived `<input>_classyfire.csv`.
-  - Caching: results are cached by default at `src/metabo_pipeline/classyfire_cache.json` (package directory with 10K+ pre-cached compounds). Re-runs reuse cached InChIKeys and only query missing ones. Use `--cache-path` to change location or format (`.json` or `.yaml`).
+  - Caching: results are cached at `src/metabo_pipeline/classyfire_cache.json`, which ships with the package pre-seeded with ~2,400 classified InChIKeys. Re-runs reuse cached keys and only query missing ones. Use `--cache-path` to write the cache elsewhere (keeping your checkout clean) or to change format (`.json` or `.yaml`).
   - Endpoint: defaults to `http://classyfire.wishartlab.com`. Use `metabo classify-check` to probe availability.
 
-## Dev Notes
-- Data files are git-ignored (e.g., `M2_*.csv`, data folders, archives).
-- Line endings are normalized via `.gitattributes`.
-- Formatting is enforced via pre-commit/Black 24.8.0 (`pip install pre-commit`, run `pre-commit install`, and `pre-commit run --all-files` for a full check).
+## Project structure
+
+```
+├── src/metabo_pipeline/
+│   ├── cli/                 # Typer commands, one module per subcommand
+│   ├── io_msdial.py         # Read MS-DIAL exports and their metadata rows
+│   ├── qc.py                # MS/MS ion counts, replicate grouping, QC metrics
+│   ├── annotations.py       # Level 1/2/3 assignment
+│   ├── merge.py             # Filter, harmonize samples, write the wide matrix
+│   ├── dedup.py             # Level 3 representative selection
+│   ├── sirius_export.py     # Build and write .ms inputs
+│   ├── sirius_collect.py    # Parse SIRIUS result directories
+│   ├── classify.py          # ClassyFire client and cache
+│   ├── bioactivity.py       # Match features to a bioactivity database
+│   └── constants.py         # All QC thresholds and defaults
+├── configs/sirius.yml       # SIRIUS adducts, databases, tasks
+├── scripts/preview_merge.py # Inspect a merge without writing output
+└── tests/                   # Unit and end-to-end tests
+```
+
+## Development
+
+```bash
+uv sync --extra dev
+uv run pytest                 # run the suite
+uv run ruff check .           # lint
+uv run ruff format .          # format
+pre-commit install            # optional: run the same checks on commit
+```
+
+Ruff handles linting, import sorting and formatting; there is no separate
+black/isort step. CI runs the suite on Linux, macOS and Windows against Python
+3.10 and 3.12, matching the cross-platform claim above.
+
+Tests cover the pure logic: MS-DIAL parsing, QC metrics and thresholds,
+annotation levels, sample-name harmonization, Level 3 deduplication, SIRIUS
+`.ms` generation, and bioactivity matching, plus an end-to-end merge over
+synthetic MS-DIAL exports. The SIRIUS subprocess driver and the ClassyFire
+client are not covered, as both need external services.
+
+Data files are git-ignored (`M2_*.csv`, data folders, archives), and line
+endings are normalized via `.gitattributes`.
 
 ## License
-TBD.
+
+MIT - see [LICENSE](LICENSE).

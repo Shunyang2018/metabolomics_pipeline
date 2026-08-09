@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import re
-from typing import List, Tuple
+
+import pandas as pd
 
 
 def infer_chrom_from_name(name: str) -> str:
@@ -40,9 +41,9 @@ def normalize_sample_id_core(name: str) -> str:
     return v
 
 
-def parse_spectrum(cell: str) -> List[Tuple[float, float]]:
+def parse_spectrum(cell: str) -> list[tuple[float, float]]:
     """Parse an MS spectrum string into (m/z, intensity) tuples."""
-    out: List[Tuple[float, float]] = []
+    out: list[tuple[float, float]] = []
     for tok in str(cell or "").split():
         if ":" not in tok:
             continue
@@ -52,3 +53,20 @@ def parse_spectrum(cell: str) -> List[Tuple[float, float]]:
         except ValueError:
             continue
     return out
+
+
+def clean_metabolite_name(value) -> str:
+    """Return a stripped metabolite name, treating missing values as blank.
+
+    A blank MS-DIAL cell arrives as NaN (or None), and ``str(nan)`` is the
+    non-empty string ``'nan'`` — which passes every placeholder check below and
+    would let an unidentified feature reach Level 1. Normalize first.
+    """
+    if value is None or (isinstance(value, float) and pd.isna(value)):
+        return ""
+    try:
+        if pd.isna(value):
+            return ""
+    except (TypeError, ValueError):
+        pass
+    return str(value).strip()

@@ -166,18 +166,14 @@ def sirius(
 
     # Priority: CLI > YAML > constants.py
     if sirius_exe is None:
-        sirius_exe = (
-            cfg_yaml.get("sirius", {}).get("executable") or constants.SIRIUS_EXECUTABLE
-        )
+        sirius_exe = cfg_yaml.get("sirius", {}).get("executable") or constants.SIRIUS_EXECUTABLE
     if cores is None:
         cores = cfg_yaml.get("sirius", {}).get("cores") or constants.SIRIUS_CORES
     if mzdev_ppm is None:
-        mzdev_ppm = (
-            cfg_yaml.get("sirius", {}).get("mzdev_ppm") or constants.SIRIUS_MZDEV_PPM
-        )
+        mzdev_ppm = cfg_yaml.get("sirius", {}).get("mzdev_ppm") or constants.SIRIUS_MZDEV_PPM
 
     sirius_exe, exe_note = guess_sirius_executable(sirius_exe)
-    note = " (source: %s)" % exe_note if exe_note else ""
+    note = f" (source: {exe_note})" if exe_note else ""
     log.info(f"Using SIRIUS executable: {sirius_exe}{note}")
     if not Path(sirius_exe).exists():
         log.warn(
@@ -201,9 +197,7 @@ def sirius(
             log.error("  3. Wait for 'Logged in' confirmation")
             log.error("  4. Close SIRIUS and retry this command")
             log.error("")
-            log.error(
-                "Get a free account at: https://bio.informatik.uni-jena.de/sirius-register/"
-            )
+            log.error("Get a free account at: https://bio.informatik.uni-jena.de/sirius-register/")
             raise typer.Exit(code=2)
         log.ok("SIRIUS login verified")
     except subprocess.TimeoutExpired:
@@ -214,9 +208,7 @@ def sirius(
     # SIRIUS 6: Use formulas only by default (others require project-space workflow)
     tasks_cfg = cfg_yaml.get("tasks", ["formulas"]) or ["formulas"]
 
-    def run_sirius(
-        ms_path: Path, out_dir: Path, mode: str, force_rerun: bool = False
-    ) -> int:
+    def run_sirius(ms_path: Path, out_dir: Path, mode: str, force_rerun: bool = False) -> int:
         if not ms_path.exists():
             log.warn(f"Missing .ms file: {ms_path}")
             return 0
@@ -317,16 +309,12 @@ def sirius(
             # SIRIUS 6: Export TSV summaries from the .sirius database
             # This creates a directory with TSV files for easy inspection
             tsv_dir = out_dir.parent / out_dir.stem.replace(".sirius", "")
-            export_success = export_tsv_summaries(
-                out_dir, tsv_dir, sirius_exe, timeout=300
-            )
+            export_success = export_tsv_summaries(out_dir, tsv_dir, sirius_exe, timeout=300)
             if not export_success:
                 log.warn(
                     "  TSV summary export failed - you can still inspect the .sirius database directly"
                 )
-                log.warn(
-                    "  Or run 'metabo sirius-collect' after logging in via SIRIUS GUI"
-                )
+                log.warn("  Or run 'metabo sirius-collect' after logging in via SIRIUS GUI")
 
             # Store result for error checking
             result = type(
@@ -388,9 +376,7 @@ def sirius(
                 # Check if directory was created (might be old output)
                 if out_dir.exists() and out_dir.is_dir():
                     dirs = [d for d in out_dir.iterdir() if d.is_dir()]
-                    log.warn(
-                        f"Found directory output (SIRIUS 5 style?): {len(dirs)} items"
-                    )
+                    log.warn(f"Found directory output (SIRIUS 5 style?): {len(dirs)} items")
                 return 0
 
             return 1

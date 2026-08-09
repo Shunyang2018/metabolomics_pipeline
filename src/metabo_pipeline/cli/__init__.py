@@ -13,9 +13,7 @@ from .sirius_cmd import sirius
 from .sirius_collect_cmd import sirius_collect
 
 # Create the main CLI app
-app = typer.Typer(
-    add_completion=False, help="Metabolomics pipeline for MS-DIAL outputs."
-)
+app = typer.Typer(add_completion=False, help="Metabolomics pipeline for MS-DIAL outputs.")
 
 # Register commands with the app
 app.command()(run)

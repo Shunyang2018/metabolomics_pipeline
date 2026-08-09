@@ -3,7 +3,6 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Optional
 
 import typer
 
@@ -15,7 +14,7 @@ log = get_logger()
 
 
 def bioactivity(
-    merged_csv: Optional[str] = typer.Argument(
+    merged_csv: str | None = typer.Argument(
         None,
         help=(
             "Merged CSV to match (default: looks in OUTPUT_DIR for "

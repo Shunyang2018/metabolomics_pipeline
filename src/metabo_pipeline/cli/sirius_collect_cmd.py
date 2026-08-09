@@ -87,14 +87,7 @@ def sirius_collect(
             for candidate in [
                 "/Applications/sirius.app/Contents/MacOS/sirius",
                 "/usr/local/bin/sirius",
-                str(
-                    Path.home()
-                    / "Downloads"
-                    / "sirius.app"
-                    / "Contents"
-                    / "MacOS"
-                    / "sirius"
-                ),
+                str(Path.home() / "Downloads" / "sirius.app" / "Contents" / "MacOS" / "sirius"),
             ]:
                 if Path(candidate).exists():
                     sirius_exe = candidate
@@ -149,15 +142,9 @@ def sirius_collect(
     has_canopus = summary.get("n_has_canopus", 0)
 
     if summary.get("rows", 0) > 0:
-        log.info(
-            f"  With structures: {has_struct} ({has_struct / summary['rows'] * 100:.1f}%)"
-        )
-        log.info(
-            f"  With formulas: {has_formula} ({has_formula / summary['rows'] * 100:.1f}%)"
-        )
-        log.info(
-            f"  With CANOPUS: {has_canopus} ({has_canopus / summary['rows'] * 100:.1f}%)"
-        )
+        log.info(f"  With structures: {has_struct} ({has_struct / summary['rows'] * 100:.1f}%)")
+        log.info(f"  With formulas: {has_formula} ({has_formula / summary['rows'] * 100:.1f}%)")
+        log.info(f"  With CANOPUS: {has_canopus} ({has_canopus / summary['rows'] * 100:.1f}%)")
 
     log.info("")
     log.info("Next steps:")

@@ -21,8 +21,7 @@ def main(input_dir: str, output_csv: str):
         r = csv.DictReader(f)
         row = next(r)
         fixed = {
-            k: row[k]
-            for k in ("chrom", "annotation_level", "alignment_id", "metabolite_name")
+            k: row[k] for k in ("chrom", "annotation_level", "alignment_id", "metabolite_name")
         }
         # show up to 5 sample columns
         sample_cols = [

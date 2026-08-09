@@ -2,9 +2,9 @@ from __future__ import annotations
 
 import json
 import time
+from collections.abc import Callable
 from pathlib import Path
 from time import perf_counter
-from typing import Callable, Dict, Optional
 
 import pandas as pd
 import requests
@@ -14,7 +14,7 @@ def _fetch_classyfire(
     inchikey: str,
     base_url: str = "http://classyfire.wishartlab.com",
     timeout: float = 15.0,
-) -> Optional[Dict]:
+) -> dict | None:
     """Fetch classification for an InChIKey from ClassyFire.
 
     Uses the primary /entities/ endpoint. Returns parsed JSON dict or None.
@@ -33,7 +33,7 @@ def _fetch_classyfire(
     return None
 
 
-def _extract_taxonomy(cf: Dict) -> Dict[str, Optional[str]]:
+def _extract_taxonomy(cf: dict) -> dict[str, str | None]:
     """Extract key taxonomy fields from a ClassyFire response."""
     out = {
         "cf_kingdom": None,
@@ -73,7 +73,7 @@ def _extract_taxonomy(cf: Dict) -> Dict[str, Optional[str]]:
     return out
 
 
-def _load_cache(path: Optional[str]) -> Dict[str, Dict[str, Optional[str]]]:
+def _load_cache(path: str | None) -> dict[str, dict[str, str | None]]:
     """Load cached taxonomy results from a JSON file."""
     if not path:
         return {}
@@ -85,7 +85,7 @@ def _load_cache(path: Optional[str]) -> Dict[str, Dict[str, Optional[str]]]:
     except (OSError, json.JSONDecodeError, TypeError):
         return {}
     # normalize keys to str and values to dict of expected fields
-    out: Dict[str, Dict[str, Optional[str]]] = {}
+    out: dict[str, dict[str, str | None]] = {}
     for k, v in (data or {}).items():
         if isinstance(v, dict):
             out[str(k)] = {
@@ -98,9 +98,7 @@ def _load_cache(path: Optional[str]) -> Dict[str, Dict[str, Optional[str]]]:
     return out
 
 
-def _save_cache(
-    path: Optional[str], cache: Dict[str, Dict[str, Optional[str]]]
-) -> None:
+def _save_cache(path: str | None, cache: dict[str, dict[str, str | None]]) -> None:
     """Persist taxonomy cache data to a JSON file."""
     if not path:
         return
@@ -114,7 +112,7 @@ def _save_cache(
         return
 
 
-def probe_classyfire(base_url: str, timeout: float = 10.0) -> Dict[str, object]:
+def probe_classyfire(base_url: str, timeout: float = 10.0) -> dict[str, object]:
     """Probe a ClassyFire-compatible API for availability and latency.
 
     Tests the primary /entities/ endpoint with a known InChIKey.
@@ -123,8 +121,8 @@ def probe_classyfire(base_url: str, timeout: float = 10.0) -> Dict[str, object]:
     key = "BSYNRYMUTXBXSQ-UHFFFAOYSA-N"  # acetaminophen (paracetamol)
     url = f"{base_url.rstrip('/')}/entities/{key}.json"
 
-    out: Dict[str, object] = {"base_url": base_url, "ok": False, "checks": []}
-    rec: Dict[str, object] = {
+    out: dict[str, object] = {"base_url": base_url, "ok": False, "checks": []}
+    rec: dict[str, object] = {
         "url": url,
         "ok": False,
         "ms": None,
@@ -155,11 +153,11 @@ def classify_level12_with_classyfire(
     base_url: str = "http://classyfire.wishartlab.com",
     results_only: bool = False,
     id_column: str = "feature_id",
-    cache_path: Optional[str] = None,
-    progress: Optional[Callable[[int, int, str, bool, str], None]] = None,
+    cache_path: str | None = None,
+    progress: Callable[[int, int, str, bool, str], None] | None = None,
     offline: bool = False,
     timeout: float = 15.0,
-) -> Dict[str, int]:
+) -> dict[str, int]:
     """Classify Level 1/2 rows via ClassyFire using unique InChIKeys and merge back.
 
     Returns a summary dict with counts.
@@ -171,10 +169,7 @@ def classify_level12_with_classyfire(
         cache_path = str(package_dir / "classyfire_cache.json")
     # Derive a friendlier default output if caller used the placeholder path
     output_csv_str = str(output_csv)
-    if (
-        output_csv_str.replace("\\", "/").endswith("outputs/merged_classified.csv")
-        and input_csv
-    ):
+    if output_csv_str.replace("\\", "/").endswith("outputs/merged_classified.csv") and input_csv:
         ip = Path(input_csv)
         suffix = ip.suffix or ".csv"
         output_csv = str(ip.with_name(ip.stem + "_classyfire").with_suffix(suffix))
@@ -192,7 +187,7 @@ def classify_level12_with_classyfire(
     keys = sorted(set(df.loc[mask, "INCHIKEY"].astype(str)))
     # Load cache and prepare results with cached hits
     cache = _load_cache(cache_path)
-    results: Dict[str, Dict[str, Optional[str]]] = {}
+    results: dict[str, dict[str, str | None]] = {}
     hit = miss = 0
     total = len(keys)
     processed = 0
@@ -263,9 +258,7 @@ def classify_level12_with_classyfire(
         if id_column not in out.columns:
             out[id_column] = out["Alignment ID"]
         minimal_cols = [id_column] + cf_cols
-        out[minimal_cols].drop_duplicates(subset=[id_column]).to_csv(
-            output_csv, index=False
-        )
+        out[minimal_cols].drop_duplicates(subset=[id_column]).to_csv(output_csv, index=False)
         return {
             "unique_keys": len(keys),
             "hits": hit,

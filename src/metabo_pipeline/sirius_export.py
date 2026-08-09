@@ -3,17 +3,16 @@ from __future__ import annotations
 import os
 import subprocess
 from pathlib import Path
-from typing import List, Tuple
 
 import pandas as pd
 
 from .logging import get_logger
-from .utils import parse_spectrum
+from .utils import clean_metabolite_name, parse_spectrum
 
 log = get_logger()
 
 
-def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
+def build_ms_entries(l3_df: pd.DataFrame) -> tuple[list[str], list[str]]:
     """Build SIRIUS .ms entries in classic CLI format using feature_id.
 
     Format per entry:
@@ -30,8 +29,8 @@ def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
       <mz> <intensity>
       ...
     """
-    pos_entries: List[str] = []
-    neg_entries: List[str] = []
+    pos_entries: list[str] = []
+    neg_entries: list[str] = []
     for _, r in l3_df.iterrows():
         fid = r.get("feature_id")
         precursor = r.get("Average Mz", "")
@@ -41,14 +40,12 @@ def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
         ms2 = parse_spectrum(r.get("MS/MS spectrum", ""))
 
         # Compose a readable compound name; append feature_id so SIRIUS summaries can map back.
-        base_name = str(r.get("Metabolite name") or "").strip() or "Unknown"
-        comp_name = (
-            base_name
-            if str(base_name).endswith(f"_{fid}")
-            else f"{base_name}_{fid}"
-        )
+        # `or ""` does not catch NaN (it is truthy), which would name the
+        # compound "nan" instead of "Unknown".
+        base_name = clean_metabolite_name(r.get("Metabolite name")) or "Unknown"
+        comp_name = base_name if str(base_name).endswith(f"_{fid}") else f"{base_name}_{fid}"
 
-        block: List[str] = []
+        block: list[str] = []
         block.append(f">compound\t{comp_name}")
         block.append(f">parentmass\t{precursor}")
         block.append(f">retentiontime\t{rt}")
@@ -66,11 +63,7 @@ def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
         block.append("")
 
         entry = "\n".join(block)
-        pol = (
-            "POS"
-            if "+" in str(ion or "")
-            else ("NEG" if "-" in str(ion or "") else "UNK")
-        )
+        pol = "POS" if "+" in str(ion or "") else ("NEG" if "-" in str(ion or "") else "UNK")
         if pol == "POS":
             pos_entries.append(entry)
         elif pol == "NEG":
@@ -79,8 +72,8 @@ def build_ms_entries(l3_df: pd.DataFrame) -> Tuple[List[str], List[str]]:
 
 
 def write_ms_files(
-    pos_entries: List[str], neg_entries: List[str], out_dir: Path
-) -> Tuple[int, int]:
+    pos_entries: list[str], neg_entries: list[str], out_dir: Path
+) -> tuple[int, int]:
     """Write POS/NEG .ms files and return the counts of entries written."""
     out_dir.mkdir(parents=True, exist_ok=True)
     pos_path = out_dir / "sirius_unknown_pos.ms"
@@ -153,9 +146,7 @@ def export_tsv_summaries(
         if output_dir.exists() and output_dir.is_dir():
             tsv_files = list(output_dir.glob("*.tsv"))
             if tsv_files:
-                log.ok(
-                    f"✓ TSV summaries exported to: {output_dir.name}/ ({len(tsv_files)} files)"
-                )
+                log.ok(f"✓ TSV summaries exported to: {output_dir.name}/ ({len(tsv_files)} files)")
                 return True
 
         # If we get here, something went wrong

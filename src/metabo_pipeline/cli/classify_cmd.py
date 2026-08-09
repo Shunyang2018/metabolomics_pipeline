@@ -30,10 +30,7 @@ def _adjust_output_for_join_merged(
         return True, output_csv
 
     results_only = False
-    if (
-        str(output_csv).replace("/", "\\") == "outputs\\merged_classified.csv"
-        and input_csv
-    ):
+    if str(output_csv).replace("/", "\\") == "outputs\\merged_classified.csv" and input_csv:
         output_csv = input_csv
 
     return results_only, output_csv
@@ -51,13 +48,9 @@ def classify(
     provider: str = typer.Option(
         "classyfire", help="Classification provider (only 'classyfire' supported)"
     ),
-    base_url: str = typer.Option(
-        "http://classyfire.wishartlab.com", help="ClassyFire base URL"
-    ),
+    base_url: str = typer.Option("http://classyfire.wishartlab.com", help="ClassyFire base URL"),
     sleep_sec: float = typer.Option(10.0, help="Sleep between API calls (seconds)"),
-    results_only: bool = typer.Option(
-        True, help="Write only identifier + classification columns"
-    ),
+    results_only: bool = typer.Option(True, help="Write only identifier + classification columns"),
     id_column: str = typer.Option(
         "feature_id", help="Identifier column to include (default: feature_id)"
     ),
@@ -89,14 +82,10 @@ def classify(
         input_csv = str(Path(constants.INPUT_DIR) / "outputs" / "merged.csv")
 
     if output_csv is None:
-        output_csv = str(
-            Path(input_csv).parent / f"{Path(input_csv).stem}_classified.csv"
-        )
+        output_csv = str(Path(input_csv).parent / f"{Path(input_csv).stem}_classified.csv")
 
     # Adjust output settings if joining with merged table
-    results_only, output_csv = _adjust_output_for_join_merged(
-        output_csv, input_csv, join_merged
-    )
+    results_only, output_csv = _adjust_output_for_join_merged(output_csv, input_csv, join_merged)
 
     # Run classification (cache mechanism is built-in via cache_path)
     summary = classify_level12_with_classyfire(
