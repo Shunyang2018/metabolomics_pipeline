@@ -1,9 +1,8 @@
 """Tests for configuration defaults.
 
-Paths used to be hardcoded to two developers' home directories
-(`/Users/wangs261/...`, `/Users/ivanablazenovic/...`), so a fresh clone of this
-"cross-platform" pipeline had defaults pointing at a specific Mac. These tests
-pin the portable behaviour.
+Path defaults used to be absolute paths inside developer home directories, so a
+fresh clone of this "cross-platform" pipeline pointed at one specific machine.
+These tests pin the portable behaviour.
 """
 
 from __future__ import annotations
@@ -45,13 +44,14 @@ class TestNoMachineSpecificDefaults:
             "correct on another machine"
         )
 
-    def test_no_developer_usernames_are_committed(self, monkeypatch):
+    def test_no_home_directory_defaults(self, monkeypatch):
+        """Guards against a developer's own path being committed as the default."""
         mod = reload_constants(monkeypatch)
         blob = " ".join(
             str(getattr(mod, n)) for n in ("INPUT_DIR", "BIOACTIVITY_DB_PATH", "SIRIUS_EXECUTABLE")
         )
-        for leaked in ("wangs261", "ivanablazenovic"):
-            assert leaked not in blob
+        for pattern in ("/Users/", "/home/", "C:\\Users", "Downloads"):
+            assert pattern not in blob, f"default path contains {pattern!r}"
 
 
 class TestEnvironmentOverrides:
