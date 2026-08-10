@@ -59,6 +59,17 @@ def final(
 
     # Progress bar (rich) if available; otherwise fallback
     pd_path, nd_path = Path(pos_dir), Path(neg_dir)
+
+    # With no table to join and no SIRIUS output, this step still succeeds and
+    # writes an empty table - which in a `metabo run` chain looks identical to a
+    # successful run. Say so plainly. It is not an error: a dataset with no
+    # Level 3 unknowns legitimately has nothing for SIRIUS to report.
+    if (j is None or not j.exists()) and not pd_path.exists() and not nd_path.exists():
+        log.warn(
+            f"No merged table and no SIRIUS output found in {out_dir}; "
+            "the final table will be empty."
+        )
+        log.warn("Run `metabo merge` (and `metabo sirius`) first, or pass --output-dir.")
     # If an extract CSV exists and no rescan requested, skip progress UI and reuse it
     reuse_extract = False
     if extract_csv and not rescan and Path(extract_csv).exists():

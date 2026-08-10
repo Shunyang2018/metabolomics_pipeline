@@ -8,83 +8,9 @@ unknowns.
 
 import pandas as pd
 import pytest
+from msdial import feature, write_msdial
 
 from metabo_pipeline.merge import list_alignment_files, merge_folder_to_wide_csv
-
-# Columns up to and including 'MS/MS spectrum' are metadata; samples follow.
-META_COLS = [
-    "Alignment ID",
-    "Average Rt(min)",
-    "Average Mz",
-    "Metabolite name",
-    "Adduct type",
-    "Weighted dot product",
-    "Reverse dot product",
-    "Matched peaks count",
-    "S/N average",
-    "MS1 isotopic spectrum",
-    "MS/MS spectrum",
-]
-
-GOOD_MSMS = "100.05:200 150.08:800 200.11:400"
-GOOD_MS1 = "200.10:1000 201.10:50"
-
-
-def feature(
-    alignment_id=0,
-    rt=1.5,
-    mz=200.1234,
-    name="Glucose",
-    adduct="[M+H]+",
-    wdot=0.9,
-    rdot=0.85,
-    peaks=5,
-    snr=50.0,
-    msms=GOOD_MSMS,
-):
-    return [
-        str(alignment_id),
-        str(rt),
-        str(mz),
-        name,
-        adduct,
-        str(wdot),
-        str(rdot),
-        str(peaks),
-        str(snr),
-        GOOD_MS1,
-        msms,
-    ]
-
-
-def write_msdial(
-    path,
-    samples,
-    features,
-    sep=",",
-    sample_intensity=100000.0,
-    blank_intensity=100.0,
-):
-    """Write an MS-DIAL export: 4 metadata rows, a header row, then features.
-
-    Sample intensities are appended to every feature row. The defaults give a
-    blank fold-change of 1000, comfortably above the documented threshold of 7,
-    so features survive QC unless a test deliberately makes them fail.
-    """
-    lead = [""] * len(META_COLS)
-    is_blank = ["blank" in s.lower() for s in samples]
-    classes = ["Blank" if b else "Sample" for b in is_blank]
-    intensities = [str(blank_intensity if b else sample_intensity) for b in is_blank]
-    rows = [
-        lead + classes,
-        lead + ["Sample"] * len(samples),
-        lead + [str(i + 1) for i in range(len(samples))],
-        lead + ["1"] * len(samples),
-        META_COLS + samples,
-    ]
-    rows.extend(list(f) + intensities for f in features)
-    path.write_text("\n".join(sep.join(r) for r in rows), encoding="utf-8")
-    return path
 
 
 @pytest.fixture

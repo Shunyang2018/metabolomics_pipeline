@@ -10,7 +10,7 @@ Cross-platform (Windows/macOS/Linux) pipeline to parse MS-DIAL alignment outputs
 - Typer-based CLI with validate, merge, SIRIUS integration, ClassyFire classification, and bioactivity matching.
 - SIRIUS integration: exports `.ms` inputs from Level 3 unknowns and can drive SIRIUS runs via `metabo sirius`.
 - Configuration: thresholds centralized in `src/metabo_pipeline/constants.py`; SIRIUS task settings in `configs/sirius.yml`.
-- Tested: unit tests over the QC, annotation-level, merge, dedup, SIRIUS-export, and bioactivity logic. Run with `pytest`.
+- Tested: 221 tests over the QC, annotation-level, merge, dedup, SIRIUS-export, bioactivity and CLI layers, on Linux/macOS/Windows. Run with `pytest`.
 
 ## Quickstart
 
@@ -264,11 +264,14 @@ Ruff handles linting, import sorting and formatting; there is no separate
 black/isort step. CI runs the suite on Linux, macOS and Windows against Python
 3.10 and 3.12, matching the cross-platform claim above.
 
-Tests cover the pure logic: MS-DIAL parsing, QC metrics and thresholds,
+Tests cover the pure logic - MS-DIAL parsing, QC metrics and thresholds,
 annotation levels, sample-name harmonization, Level 3 deduplication, SIRIUS
-`.ms` generation, and bioactivity matching, plus an end-to-end merge over
-synthetic MS-DIAL exports. The SIRIUS subprocess driver and the ClassyFire
-client are not covered, as both need external services.
+`.ms` generation, bioactivity matching - plus an end-to-end merge over synthetic
+MS-DIAL exports and every `metabo` subcommand driven through Typer's
+`CliRunner`. Nothing in the suite contacts SIRIUS or the ClassyFire API, so it
+runs anywhere in a couple of seconds. What remains uncovered is the code that
+genuinely needs those external services: the SIRIUS subprocess driver, the
+result-directory parser, and the HTTP client.
 
 Data files are git-ignored (`M2_*.csv`, data folders, archives), and line
 endings are normalized via `.gitattributes`.

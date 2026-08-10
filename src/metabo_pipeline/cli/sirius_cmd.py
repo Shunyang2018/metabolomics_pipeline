@@ -46,6 +46,42 @@ signal.signal(signal.SIGINT, _cleanup_sirius_processes)
 signal.signal(signal.SIGTERM, _cleanup_sirius_processes)
 
 
+def _check_sirius_login(sirius_exe: str) -> None:
+    """Verify SIRIUS 6+ authentication before starting a run.
+
+    A missing executable surfaces as a clear message rather than a bare
+    FileNotFoundError traceback from subprocess.
+    """
+    log.info("Checking SIRIUS login status...")
+    try:
+        login_check = subprocess.run(
+            [sirius_exe, "login", "--show"], capture_output=True, text=True, timeout=30
+        )
+    except FileNotFoundError as exc:
+        log.error(f"SIRIUS executable not found: {sirius_exe}")
+        log.error("Set --sirius-exe, SIRIUS_HOME, or SIRIUS_EXECUTABLE in constants.py.")
+        log.error("Use --dry-run to exercise the pipeline without a SIRIUS install.")
+        raise typer.Exit(code=2) from exc
+    except subprocess.TimeoutExpired:
+        log.warn("Login check timed out, proceeding anyway...")
+        return
+
+    if (
+        "not logged in" in login_check.stdout.lower()
+        or "please login" in login_check.stderr.lower()
+    ):
+        log.error("SIRIUS requires authentication.")
+        log.error("Please login via SIRIUS GUI:")
+        log.error("  1. Open SIRIUS application")
+        log.error("  2. Login with your account")
+        log.error("  3. Wait for 'Logged in' confirmation")
+        log.error("  4. Close SIRIUS and retry this command")
+        log.error("")
+        log.error("Get a free account at: https://bio.informatik.uni-jena.de/sirius-register/")
+        raise typer.Exit(code=2)
+    log.ok("SIRIUS login verified")
+
+
 def sirius(
     output_dir: str = typer.Option(
         None,
@@ -180,28 +216,13 @@ def sirius(
             "SIRIUS executable not found on disk; update --sirius-exe or configs/sirius.yml if this fails at runtime."
         )
 
-    # Check if SIRIUS is logged in (required for SIRIUS 6+)
-    log.info("Checking SIRIUS login status...")
-    try:
-        login_check = subprocess.run(
-            [sirius_exe, "login", "--show"], capture_output=True, text=True, timeout=30
-        )
-        if (
-            "not logged in" in login_check.stdout.lower()
-            or "please login" in login_check.stderr.lower()
-        ):
-            log.error("SIRIUS requires authentication.")
-            log.error("Please login via SIRIUS GUI:")
-            log.error("  1. Open SIRIUS application")
-            log.error("  2. Login with your account")
-            log.error("  3. Wait for 'Logged in' confirmation")
-            log.error("  4. Close SIRIUS and retry this command")
-            log.error("")
-            log.error("Get a free account at: https://bio.informatik.uni-jena.de/sirius-register/")
-            raise typer.Exit(code=2)
-        log.ok("SIRIUS login verified")
-    except subprocess.TimeoutExpired:
-        log.warn("Login check timed out, proceeding anyway...")
+    # Check if SIRIUS is logged in (required for SIRIUS 6+).
+    # Skipped under --dry-run, which is documented as producing output without
+    # running SIRIUS at all - and so must work on a machine with no install.
+    if dry_run:
+        log.info("Dry run: skipping SIRIUS login check")
+    else:
+        _check_sirius_login(sirius_exe)
 
     # SIRIUS 6: Most config options are not available as CLI flags
     # Use SIRIUS defaults which are already optimized for metabolomics
@@ -216,6 +237,17 @@ def sirius(
         # Resolve absolute paths to avoid SIRIUS writing under Program Files
         ms_path = ms_path.resolve()
         out_dir = out_dir.resolve()
+
+        # --dry-run creates the output SIRIUS would create, without invoking it,
+        # so the surrounding pipeline can be exercised with no install present.
+        if dry_run:
+            n_compounds = ms_path.read_text(encoding="utf-8", errors="ignore").count(">compound")
+            out_dir.mkdir(parents=True, exist_ok=True)
+            log.info(f"Dry run ({mode}): would run SIRIUS on {n_compounds} compounds")
+            log.info(f"  input:  {ms_path}")
+            log.info(f"  output: {out_dir}")
+            log.info(f"  tasks:  {', '.join(tasks_cfg)}")
+            return n_compounds
 
         # Check if output already exists (skip if present, unless --force)
         if not force_rerun and out_dir.exists():
