@@ -3,7 +3,18 @@ Centralized constants for pipeline thresholds and defaults.
 
 All QC filtering and processing parameters are defined here.
 Adjust these values to customize the pipeline behavior.
+
+Paths are resolved from the environment first, so a checkout works without being
+edited and nothing machine-specific needs to be committed:
+
+    METABO_INPUT_DIR      directory of MS-DIAL alignment exports
+    METABO_BIOACTIVITY_DB bioactivity reference database CSV
+    SIRIUS_EXECUTABLE     SIRIUS binary (otherwise auto-detected)
+
+Every one of these can also be overridden per invocation on the command line.
 """
+
+import os
 
 # =============================================================================
 # MS/MS FILTERING
@@ -75,12 +86,15 @@ SIRIUS_VERSION: str = "v6"
 - v6: SIRIUS 6 creates .sirius project files and TSV summary files
 Set this to match your SIRIUS installation."""
 
-SIRIUS_EXECUTABLE: str = "/Users/wangs261/Downloads/sirius.app/Contents/MacOS/sirius"
-"""Path to SIRIUS executable on your system.
-The CLI will auto-detect common locations if this is not found.
-macOS: typically /Applications/sirius.app/Contents/MacOS/sirius
-Windows: typically C:\\Program Files\\SIRIUS\\sirius.exe
-Linux: typically /usr/local/bin/sirius or /opt/sirius/bin/sirius"""
+SIRIUS_EXECUTABLE: str = os.environ.get("SIRIUS_EXECUTABLE", "")
+"""Path to the SIRIUS executable, or empty to auto-detect.
+
+Left empty, the CLI searches PATH, then SIRIUS_HOME, then the usual install
+locations for the current platform:
+macOS: /Applications/sirius.app/Contents/MacOS/sirius
+Windows: C:\\Program Files\\SIRIUS\\sirius.exe
+Linux: /usr/local/bin/sirius, /usr/bin/sirius, /opt/sirius/bin/sirius
+Override per run with `metabo sirius --sirius-exe <path>`."""
 
 SIRIUS_CORES: int = 8
 """Number of CPU cores for SIRIUS to use during computations."""
@@ -91,15 +105,17 @@ SIRIUS_MZDEV_PPM: float = 10.0
 # =============================================================================
 # INPUT/OUTPUT DIRECTORIES
 # =============================================================================
-INPUT_DIR: str = "/Users/wangs261/Documents/project/excel_merge/test_csv"
+INPUT_DIR: str = os.environ.get("METABO_INPUT_DIR", "data")
 """Default directory containing MS-DIAL alignment output files (CSV/TXT).
-Can be overridden via command line: metabo merge <custom_path>"""
+
+Relative to the working directory, so a checkout is usable as-is. Set
+METABO_INPUT_DIR, or override per run: `metabo merge <path>`."""
 
 # =============================================================================
 # BIOACTIVITY MATCHING
 # =============================================================================
-BIOACTIVITY_DB_PATH: str = (
-    "/Users/ivanablazenovic/Downloads/natural_product_metabolite_bioactivity_database_may_2026.csv"
-)
-"""Path to the bioactivity reference database CSV (must include an InChIKey column).
-Can be overridden via command line: metabo bioactivity --db <custom_path>"""
+BIOACTIVITY_DB_PATH: str = os.environ.get("METABO_BIOACTIVITY_DB", "data/bioactivity_database.csv")
+"""Path to the bioactivity reference database CSV (needs an InChIKey column).
+
+The database is not distributed with this repository. Set METABO_BIOACTIVITY_DB,
+or override per run: `metabo bioactivity --db <path>`."""

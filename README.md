@@ -9,8 +9,8 @@ Cross-platform (Windows/macOS/Linux) pipeline to parse MS-DIAL alignment outputs
 ## Status
 - Typer-based CLI with validate, merge, SIRIUS integration, ClassyFire classification, and bioactivity matching.
 - SIRIUS integration: exports `.ms` inputs from Level 3 unknowns and can drive SIRIUS runs via `metabo sirius`.
-- Configuration: thresholds centralized in `src/metabo_pipeline/constants.py`; SIRIUS task settings in `configs/sirius.yml`.
-- Tested: 221 tests over the QC, annotation-level, merge, dedup, SIRIUS-export, bioactivity and CLI layers, on Linux/macOS/Windows. Run with `pytest`.
+- Configuration: thresholds centralized in `src/metabo_pipeline/constants.py`; paths from the environment (see [Configuration](#configuration)); SIRIUS task settings in `configs/sirius.yml`.
+- Tested: 285 tests over the QC, annotation-level, merge, dedup, SIRIUS export/collect, bioactivity and CLI layers, on Linux/macOS/Windows. Run with `pytest`.
 
 ## Quickstart
 
@@ -39,6 +39,20 @@ Cross-platform (Windows/macOS/Linux) pipeline to parse MS-DIAL alignment outputs
 - `metabo merge` (uses INPUT_DIR from constants.py, outputs to INPUT_DIR/outputs/)
 - `metabo merge /custom/path --output-dir /custom/output` (override paths)
 - Outputs include SIRIUS inputs: `outputs/sirius_unknown_pos.ms` and `outputs/sirius_unknown_neg.ms` built from Level 3 unknowns (m/z 150–800)
+
+## Configuration
+
+Thresholds live in `src/metabo_pipeline/constants.py`. Paths are read from the
+environment so a fresh checkout works without editing anything:
+
+| Variable | Default | Meaning |
+| --- | --- | --- |
+| `METABO_INPUT_DIR` | `data` | Directory of MS-DIAL alignment exports |
+| `METABO_BIOACTIVITY_DB` | `data/bioactivity_database.csv` | Bioactivity reference CSV (not distributed here) |
+| `SIRIUS_EXECUTABLE` | *(auto-detect)* | SIRIUS binary; left unset, PATH, `SIRIUS_HOME` and the usual per-platform install locations are searched |
+
+Each can also be overridden per invocation — `metabo merge <dir>`,
+`metabo bioactivity --db <path>`, `metabo sirius --sirius-exe <path>`.
 
 ## Commands
 - `metabo run`: **run the complete pipeline** - merge → (classify + sirius in parallel) → final → bioactivity. One command to do it all!

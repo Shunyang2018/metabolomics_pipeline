@@ -311,7 +311,11 @@ def _value_for_column(header: list[str], row: list[str], colname_substr: str) ->
     needle = colname_substr.lower()
     for i, h in enumerate(header):
         if needle in h.lower():
-            return row[i] if i < len(row) else None
+            if i >= len(row):
+                return None
+            # A header-only file splits to [''], so blanks become None rather
+            # than leaking empty strings into the output table.
+            return row[i].strip() or None
     return None
 
 
@@ -574,10 +578,22 @@ def collect_sirius_results(
             else:
                 # Left-join SIRIUS onto merged to keep all original rows
                 out = merged.merge(df, on="feature_id", how="left")
-            # Overwrite 'Metabolite name' only where a sirius_name exists
+            # Overwrite 'Metabolite name' where a sirius_name exists - but only
+            # for rows that were unknown or Level 3, matching the annotation-level
+            # rule below. A Level 1/2 name comes from a spectral-library match and
+            # must not be replaced by a computational prediction: that would leave
+            # annotation_level asserting a confidence the name no longer has.
+            # Feature ids can collide here, because the id is recovered from the
+            # trailing numeric segment of SIRIUS's mappingFeatureId.
             if "sirius_name" in out.columns and "Metabolite name" in out.columns:
                 sn = out["sirius_name"].astype("string")
-                mask = sn.notna() & (sn.str.len() > 0)
+                has_sirius_name = sn.notna() & (sn.str.len() > 0)
+                if "annotation_level" in out.columns:
+                    lvl_before = out["annotation_level"].astype("string")
+                    renameable = lvl_before.isna() | (lvl_before == "3")
+                else:
+                    renameable = pd.Series(True, index=out.index)
+                mask = has_sirius_name & renameable
                 out.loc[mask, "Metabolite name"] = "SIRIUS_" + sn[mask]
             # Update annotation_level based on SIRIUS evidence for rows with unknown/level 3
             lvl_col = "annotation_level"
