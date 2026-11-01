@@ -28,6 +28,7 @@ ALL_COMMANDS = [
     "sirius-collect",
     "final",
     "bioactivity",
+    "validate",
 ]
 
 
@@ -101,7 +102,8 @@ class TestMergeCommand:
         out = tmp_path / "out" / "merged.csv"
 
         shallow = runner.invoke(app, ["merge", str(d), "--output", str(out)])
-        assert "Merged 0 files" in shallow.output
+        assert shallow.exit_code != 0
+        assert "No MS-DIAL" in " ".join(shallow.output.split())
 
         deep = runner.invoke(app, ["merge", str(d), "--output", str(out), "--recursive"])
         assert deep.exit_code == 0, deep.output

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import shutil
 import subprocess
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
@@ -22,18 +21,7 @@ log = get_logger()
 
 def _get_metabo_executable() -> str:
     """Resolve the current metabo executable path for subprocess calls."""
-    candidates = []
-    try:
-        candidates.append(Path(sys.argv[0]).resolve())
-    except Exception:
-        pass
-    which = shutil.which("metabo")
-    if which:
-        candidates.append(Path(which))
-    for c in candidates:
-        if c and c.exists():
-            return str(c)
-    return "metabo"
+    return sys.executable
 
 
 def _run_classify_task(csv_path: str, output_dir: str):
@@ -52,12 +40,10 @@ def _run_classify_task(csv_path: str, output_dir: str):
     unique_keys = summary.get("unique_keys", 0)
     hits = summary.get("hits", 0)
     miss = summary.get("miss", 0)
-    cached = hits - summary.get("api_calls", 0)
     rows = summary.get("rows", 0)
     added_cols = summary.get("added_cols", 0)
 
     log.info(f"  ClassyFire: {unique_keys} unique InChIKeys processed")
-    log.info(f"    • Cached: {cached}, API calls: {summary.get('api_calls', 0)}")
     log.info(f"    • Hits: {hits}, Misses: {miss}")
     log.info(f"    • Output: {rows} rows, +{added_cols} classification columns")
     return ("classify", True, summary)
@@ -68,7 +54,7 @@ def _run_sirius_task(output_dir: str):
     log.info("  → Starting SIRIUS analysis...")
     metabo_exe = _get_metabo_executable()
     result = subprocess.run(
-        [metabo_exe, "sirius", "--output-dir", output_dir],
+        [metabo_exe, "-m", "metabo_pipeline", "sirius", "--output-dir", output_dir],
         capture_output=True,
         text=True,
     )
@@ -95,7 +81,10 @@ def _run_parallel_tasks(tasks, task_names):
         future_to_task = {executor.submit(_dispatch_task, task): task[0] for task in tasks}
 
         for future in as_completed(future_to_task):
-            result_name, success, error = future.result()
+            try:
+                result_name, success, error = future.result()
+            except Exception as exc:
+                result_name, success, error = future_to_task[future], False, str(exc)
             results[result_name] = (success, error)
             if success:
                 log.ok(f"  ✓ {result_name.title()} completed")
@@ -105,7 +94,9 @@ def _run_parallel_tasks(tasks, task_names):
     return results
 
 
-def _create_final_merge(merged_csv: str, output_dir: str):
+def _create_final_merge(
+    merged_csv: str, output_dir: str, *, use_classified: bool = True, use_sirius: bool = True
+) -> Path:
     """Create final merged table with SIRIUS results."""
     log.info("\n[3/4] CREATING final merged table...")
 
@@ -113,11 +104,16 @@ def _create_final_merge(merged_csv: str, output_dir: str):
     j = Path(merged_csv)
     # Prefer classified output if present
     classified = j.with_name(j.stem + "_classyfire").with_suffix(j.suffix)
-    if classified.exists():
+    if use_classified and classified.exists():
         log.info(f"Using classified table: {classified.name}")
         j = classified
 
     output_csv_path = j.with_name(j.stem + "_final").with_suffix(j.suffix)
+
+    if not use_sirius:
+        # Skipping a stage must never reuse a previous dataset's cache.
+        output_csv_path.write_bytes(j.read_bytes())
+        return output_csv_path
 
     summary = collect_sirius_results(
         pos_dir=Path(f"{output_dir}/sirius_pos"),
@@ -126,14 +122,18 @@ def _create_final_merge(merged_csv: str, output_dir: str):
         join_with_merged=j,
         progress=None,
         extract_cache=Path(f"{output_dir}/sirius_identifications.csv"),
-        force_rescan=False,
+        force_rescan=True,
     )
 
     log.ok(f"✓ Final merge complete: {output_csv_path.name}")
-    log.info(f"  • Total rows: {summary['rows']}")
+    import pandas as pd
+
+    log.info(f"  • Total rows: {len(pd.read_csv(output_csv_path))}")
 
     # Show SIRIUS statistics
-    log.info(f"  • SIRIUS compounds: {summary.get('n_pos', 0)} POS, {summary.get('n_neg', 0)} NEG")
+    log.info(
+        f"  • SIRIUS compounds: {summary.get('pos_compounds', 0)} POS, {summary.get('neg_compounds', 0)} NEG"
+    )
 
     # Show annotation level distribution after SIRIUS
     ann_counts = summary.get("ann_after", {}) or summary.get("annotation_level_counts", {})
@@ -144,27 +144,21 @@ def _create_final_merge(merged_csv: str, output_dir: str):
         log.info(f"      L3: {ann_counts.get('3', 0)} (Putative structure - SIRIUS)")
         log.info(f"      L4: {ann_counts.get('4', 0)} (Molecular formula/class)")
         log.info(f"      L5: {ann_counts.get('5', 0)} (Exact mass only)")
+    return output_csv_path
 
 
-def _run_bioactivity(output_dir: str, bioactivity_db: str | None) -> None:
+def _run_bioactivity(output_dir: str, bioactivity_db: str | None, merged_csv: Path) -> None:
     """Match the final merged table against the bioactivity database."""
     log.info("\n[4/4] MATCHING bioactivity database...")
 
     out_dir = Path(output_dir)
-    merged_csv = None
-    for name in ("merged_classyfire_final.csv", "merged_classyfire.csv", "merged.csv"):
-        candidate = out_dir / name
-        if candidate.exists():
-            merged_csv = candidate
-            break
-    if merged_csv is None:
-        log.warn(f"No merged CSV found in {out_dir}; skipping bioactivity match")
-        return
 
     db_path = Path(bioactivity_db) if bioactivity_db else Path(constants.BIOACTIVITY_DB_PATH)
     if not db_path.exists():
-        log.warn(f"Bioactivity database not found: {db_path}; skipping bioactivity match")
-        return
+        log.error(
+            f"Bioactivity database not found: {db_path}; use --skip-bioactivity to omit this stage"
+        )
+        raise typer.Exit(code=2)
 
     output_csv = out_dir / "bioactives.csv"
     summary = match_bioactives(merged_csv, db_path, output_csv)
@@ -186,8 +180,13 @@ def run(
     bioactivity_db: str = typer.Option(
         None, help="Path to bioactivity database CSV (default: constants.BIOACTIVITY_DB_PATH)"
     ),
+    sample_token: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--sample-token",
+        help="Real-sample token; repeat for multiple tokens (default: crude, mcx)",
+    ),
 ):
-    """Run the complete pipeline: merge → (classify + sirius in parallel) → final → bioactivity.
+    """Run merge, parallel annotation, final integration and reference matching.
 
     This command orchestrates the full workflow:
     1. Merge MS-DIAL files (unless --skip-merge)
@@ -204,6 +203,11 @@ def run(
         output_dir = str(Path(input_dir) / "outputs")
 
     merged_csv = str(Path(output_dir) / "merged.csv")
+    if not skip_merge and Path(output_dir).exists() and any(Path(output_dir).iterdir()):
+        log.error(
+            "Output directory is not empty. Choose a fresh --output-dir, or use --skip-merge to resume."
+        )
+        raise typer.Exit(code=2)
 
     log.info("=" * 60)
     log.info("METABOLOMICS PIPELINE - FULL RUN")
@@ -213,14 +217,21 @@ def run(
     if not skip_merge:
         log.info("\n[1/4] MERGING MS-DIAL files...")
         # Call merge directly
-        summary = merge_folder_to_wide_csv(
-            input_dir=Path(input_dir),
-            output_csv=Path(merged_csv),
-            recursive=False,
-        )
+        try:
+            summary = merge_folder_to_wide_csv(
+                input_dir=Path(input_dir),
+                output_csv=Path(merged_csv),
+                recursive=False,
+                real_sample_tokens=set(t.lower() for t in sample_token)
+                if sample_token
+                else constants.REAL_SAMPLE_TOKENS,
+            )
+        except ValueError as exc:
+            log.error(str(exc))
+            raise typer.Exit(code=2) from exc
         log.ok(f"✓ Merge complete: {merged_csv}")
-        log.info(f"  • {summary['rows']} features across {summary.get('n_samples', 'N/A')} samples")
-        log.info(f"  • Files merged: {summary.get('n_files_merged', 'N/A')}")
+        log.info(f"  • {summary['rows']} retained features")
+        log.info(f"  • Files merged: {summary['files']}")
 
         # Show annotation level distribution
         ann_post = summary.get("ann_post", {})
@@ -230,9 +241,9 @@ def run(
             )
 
         # Show SIRIUS export stats
-        if summary.get("sirius_exported"):
+        if summary.get("sirius_l3_total"):
             log.info(
-                f"  • SIRIUS inputs: {summary.get('sirius_pos_compounds', 0)} POS, {summary.get('sirius_neg_compounds', 0)} NEG compounds"
+                f"  • SIRIUS inputs: {summary.get('sirius_pos_count', 0)} POS, {summary.get('sirius_neg_count', 0)} NEG compounds"
             )
     else:
         log.info(f"\n[1/4] SKIPPING merge (using existing: {merged_csv})")
@@ -263,14 +274,16 @@ def run(
         failed = [name for name, (success, _) in results.items() if not success]
         if failed:
             log.error(f"\nFailed tasks: {', '.join(failed)}")
-            log.warn("Proceeding to final merge with available results...")
+            raise typer.Exit(code=1)
 
     # Step 3: Create final merged table
-    _create_final_merge(merged_csv, output_dir)
+    final_csv = _create_final_merge(
+        merged_csv, output_dir, use_classified=not skip_classify, use_sirius=not skip_sirius
+    )
 
     # Step 4: Match against bioactivity database
     if not skip_bioactivity:
-        _run_bioactivity(output_dir, bioactivity_db)
+        _run_bioactivity(output_dir, bioactivity_db, final_csv)
     else:
         log.info("\n[4/4] SKIPPING bioactivity matching")
 

@@ -1,0 +1,11 @@
+Class,,,,,,,,,,,,,Sample,Sample,Blank
+File type,,,,,,,,,,,,,Sample,Sample,Sample
+Injection order,,,,,,,,,,,,,1,2,3
+Batch ID,,,,,,,,,,,,,1,1,1
+Alignment ID,Average Rt(min),Average Mz,Metabolite name,Adduct type,INCHIKEY,SMILES,Weighted dot product,Reverse dot product,Matched peaks count,S/N average,MS1 isotopic spectrum,MS/MS spectrum,demo_C18_crude_1_pos,demo_C18_crude_2_pos,demo_C18_blank_pos
+0,1.5,200,Demo library A,[M+H]+,AAAAAAAAAAAAAA-BBBBBBBBBB-C,,0.9,0.85,5,50,200:1000 201:50,50:100 80:200 120:300,1000,1200,10
+1,2.5,250,Demo tentative B,[M+H]+,CCCCCCCCCCCCCC-DDDDDDDDDD-E,,0.65,0.7,5,50,250:1000 251:50,50:100 80:200 120:300,1000,1200,10
+2,3.5,300,Unknown,[M+H]+,,,0.2,0.1,5,50,300:1000 301:50,50:100 80:200 120:300,1000,1200,10
+3,1.5,400,Rejected: sparse MS/MS,[M+H]+,,,0.9,0.85,5,50,400:1000 401:50,50:100,1000,1200,10
+4,1.5,450,Rejected: low S/N,[M+H]+,,,0.9,0.85,5,2,450:1000 451:50,50:100 80:200 120:300,1000,1200,10
+5,1.5,500,Rejected: blank background,[M+H]+,,,0.9,0.85,5,50,500:1000 501:50,50:100 80:200 120:300,20,30,10

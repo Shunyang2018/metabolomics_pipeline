@@ -9,6 +9,7 @@ isotope layer differs slightly from the reference entry.
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 
 import pandas as pd
@@ -19,6 +20,7 @@ _KNOWN_NON_SAMPLE_COLS = {
     "chrom",
     "annotation_level",
     "mode",
+    "source_file",
     "Alignment ID",
     "Average Rt(min)",
     "Average Mz",
@@ -74,12 +76,22 @@ def inchikey_block1(value) -> str | None:
 
 def identify_sample_columns(columns: list[str]) -> list[str]:
     """Return the subset of columns that hold per-sample intensities."""
+    # Merge records which samples were actually evaluated by QC. Prefer that
+    # explicit membership to guessing from an open-ended metadata blacklist.
+    declared = {
+        str(c).removeprefix("present_percent_")
+        for c in columns
+        if str(c).startswith("present_percent_")
+    }
+    controls = {"blank", "mb", "resuspension", "qc", "pool"}
     return [
         c
         for c in columns
         if c not in _KNOWN_NON_SAMPLE_COLS
         and c not in _METRIC_EXACT
         and not str(c).startswith(_METRIC_PREFIXES)
+        and (not declared or c in declared)
+        and not controls.intersection(re.split(r"[^a-z0-9]+", str(c).lower()))
     ]
 
 
@@ -145,7 +157,7 @@ def match_bioactives(
 
     return {
         "features_with_inchikey": int(feats[inchikey_col].notna().sum()),
-        "unique_matched_skeletons": int(matched_feats["_ikey_block1"].nunique()),
+        "unique_matched_skeletons": int(out[inchikey_col].apply(inchikey_block1).nunique()),
         "bioactivity_db_rows": int(len(matched_db)),
         "output_rows": int(len(out)),
         "unique_features_matched": (

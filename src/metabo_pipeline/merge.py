@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import csv
 import re
+from collections import Counter
 from collections.abc import Callable
+from itertools import islice
 from pathlib import Path
 
 import pandas as pd
@@ -41,9 +44,18 @@ def merge_folder_to_wide_csv(
     output_csv: Path,
     recursive: bool = False,
     progress: Callable[[dict[str, int]], None] | None = None,
+    real_sample_tokens: set[str] | None = REAL_SAMPLE_TOKENS,
 ) -> dict[str, int]:
     """Merge filtered MS-DIAL tables into a single wide-format CSV."""
-    files = list_alignment_files(input_dir, recursive=recursive)
+    if not input_dir.is_dir():
+        raise ValueError(f"Input directory not found: {input_dir}")
+    output_dir_in_input = input_dir.resolve() in output_csv.parent.resolve().parents
+    files = [
+        p
+        for p in list_alignment_files(input_dir, recursive=recursive)
+        if p != output_csv.resolve()
+        and not (output_dir_in_input and output_csv.parent.resolve() in p.parents)
+    ]
     totals = {
         "raw": 0,
         "after_msms": 0,
@@ -58,23 +70,26 @@ def merge_folder_to_wide_csv(
     frames: list[pd.DataFrame] = []
     skipped_files: list[str] = []
     for p in files:
-        # Read with header row at line 5 (0-based index 4); MS-DIAL .txt is tab-delimited.
-        if p.suffix.lower() == ".txt":
-            df = pd.read_csv(p, header=4, encoding="utf-8-sig", sep="\t")
-        else:
-            df = pd.read_csv(p, header=4, encoding="utf-8-sig")
-
-        cols = list(df.columns)
-        if "Alignment ID" not in cols or "MS/MS spectrum" not in cols:
-            # Skip non-MS-DIAL tables (e.g., GCMS exports) in mixed folders.
-            print(f"Skipping non-MS-DIAL file: {p.name}")
+        delimiter = "\t" if p.suffix.lower() == ".txt" else ","
+        with p.open(encoding="utf-8-sig", newline="") as handle:
+            header_rows = list(islice(csv.reader(handle, delimiter=delimiter), 5))
+        if len(header_rows) < 5 or not {"Alignment ID", "MS/MS spectrum"}.issubset(header_rows[4]):
             skipped_files.append(p.name)
             continue
-        last_meta_col = (
-            cols.index("MS/MS spectrum")
-            if "MS/MS spectrum" in cols
-            else max(30, cols.index("Alignment ID") + 1 if "Alignment ID" in cols else 30)
-        )
+        raw_samples = header_rows[4][header_rows[4].index("MS/MS spectrum") + 1 :]
+        if len(raw_samples) != len(set(raw_samples)):
+            raise ValueError(
+                f"Duplicate raw sample names in {p.name}; each injection must have a unique name."
+            )
+        # Read with header row at line 5 (0-based index 4); MS-DIAL .txt is tab-delimited.
+        try:
+            df = pd.read_csv(p, header=4, encoding="utf-8-sig", sep=delimiter)
+        except pd.errors.EmptyDataError:
+            skipped_files.append(p.name)
+            continue
+
+        cols = list(df.columns)
+        last_meta_col = cols.index("MS/MS spectrum")
         sample_cols_raw = cols[last_meta_col + 1 :]
 
         raw_cnt = int(df.shape[0])
@@ -91,6 +106,12 @@ def merge_folder_to_wide_csv(
 
         # Normalize sample column names and keep metadata + samples
         rename_samples = {c: normalize_sample_id_core(c) for c in sample_cols_raw}
+        duplicates = [name for name, n in Counter(rename_samples.values()).items() if n > 1]
+        if duplicates or "" in rename_samples.values():
+            raise ValueError(
+                f"Ambiguous normalized sample names in {p.name}: {duplicates}. "
+                "Give each injection a unique sample name before merging."
+            )
         df = df.rename(columns=rename_samples)
         feat_df = df[cols[: last_meta_col + 1]].copy()
         feat_df["annotation_level"] = df["annotation_level"]
@@ -108,10 +129,16 @@ def merge_folder_to_wide_csv(
             )
         feat_df.insert(0, "chrom", chrom)
         feat_df.insert(1, "mode", mode)
+        feat_df.insert(2, "source_file", p.relative_to(input_dir.resolve()).as_posix())
 
         # Per-group QC metrics and gating
         blank_col = "blank" if "blank" in feat_df.columns else None
-        group_cols = build_group_cols(norm_sample_cols, real_sample_tokens=REAL_SAMPLE_TOKENS)
+        group_cols = build_group_cols(norm_sample_cols, real_sample_tokens=real_sample_tokens)
+        if not group_cols:
+            raise ValueError(
+                f"No real sample groups recognized in {p.name}. "
+                "Set --sample-token to a token in your sample names (default: crude, mcx)."
+            )
         feat_df = compute_group_metrics(feat_df, group_cols, blank_col)
         mask = pass_any_mask(
             feat_df, group_cols, BLANK_FOLD_MIN, PRESENT_PERCENT_MIN, CV_PERCENT_MAX
@@ -150,7 +177,7 @@ def merge_folder_to_wide_csv(
     if frames:
         merged = pd.concat(frames, ignore_index=True)
     else:
-        merged = pd.DataFrame()
+        raise ValueError(f"No MS-DIAL alignment tables found in {input_dir}")
 
     # Isomer labeling removed per request (no isomer_label column)
 

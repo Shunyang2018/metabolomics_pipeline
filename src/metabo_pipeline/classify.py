@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import time
 from collections.abc import Callable
 from pathlib import Path
@@ -84,6 +85,8 @@ def _load_cache(path: str | None) -> dict[str, dict[str, str | None]]:
         data = json.loads(p.read_text(encoding="utf-8"))
     except (OSError, json.JSONDecodeError, TypeError):
         return {}
+    if not isinstance(data, dict):
+        return {}
     # normalize keys to str and values to dict of expected fields
     out: dict[str, dict[str, str | None]] = {}
     for k, v in (data or {}).items():
@@ -161,12 +164,17 @@ def classify_level12_with_classyfire(
     """Classify Level 1/2 rows via ClassyFire using unique InChIKeys and merge back.
 
     Returns a summary dict with counts.
-    Cache defaults to package directory/classyfire_cache.json if not specified.
+    Cache defaults to a writable user cache directory if not specified.
     """
-    # Default cache path to package directory if not provided
+    # Installed packages can be read-only. Keep downloaded results outside
+    # the source tree and let callers provide an explicit reproducible cache.
     if cache_path is None:
-        package_dir = Path(__file__).parent
-        cache_path = str(package_dir / "classyfire_cache.json")
+        base = Path(
+            os.environ.get("LOCALAPPDATA")
+            or os.environ.get("XDG_CACHE_HOME")
+            or Path.home() / ".cache"
+        )
+        cache_path = str(base / "metabo_pipeline" / "classyfire.json")
     # Derive a friendlier default output if caller used the placeholder path
     output_csv_str = str(output_csv)
     if output_csv_str.replace("\\", "/").endswith("outputs/merged_classified.csv") and input_csv:
@@ -181,9 +189,11 @@ def classify_level12_with_classyfire(
             f"Found columns: {cols}"
         )
 
-    mask = df["annotation_level"].astype(str).isin(["1", "2"]) & df["INCHIKEY"].astype(
-        str
-    ).str.len().gt(0)
+    key_values = df["INCHIKEY"].astype("string").str.strip()
+    mask = (
+        df["annotation_level"].astype(str).isin(["1", "2"]) & key_values.notna() & key_values.ne("")
+    )
+    df["INCHIKEY"] = key_values
     keys = sorted(set(df.loc[mask, "INCHIKEY"].astype(str)))
     # Load cache and prepare results with cached hits
     cache = _load_cache(cache_path)
@@ -234,12 +244,16 @@ def classify_level12_with_classyfire(
     _save_cache(cache_path, cache)
 
     # Merge back
+    tax_columns = ["cf_kingdom", "cf_superclass", "cf_class", "cf_subclass", "cf_direct_parent"]
     tax_df = (
-        pd.DataFrame.from_dict(results, orient="index")
+        pd.DataFrame.from_dict(results, orient="index", columns=tax_columns)
         .reset_index()
         .rename(columns={"index": "INCHIKEY"})
     )
-    out = df.merge(tax_df, on="INCHIKEY", how="left")
+    tax_df["INCHIKEY"] = tax_df["INCHIKEY"].astype("string")
+    # Reclassification refreshes taxonomy instead of creating _x/_y columns.
+    out = df.drop(columns=tax_columns, errors="ignore").merge(tax_df, on="INCHIKEY", how="left")
+    Path(output_csv).parent.mkdir(parents=True, exist_ok=True)
 
     cf_cols = [
         c

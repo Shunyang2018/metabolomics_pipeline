@@ -37,7 +37,7 @@ def _read_first_rows(path: Path, n: int = 6, encoding: str = "utf-8-sig") -> lis
     """Read the first few header rows from an MS-DIAL export."""
     rows: list[list[str]] = []
     with path.open("r", encoding=encoding, newline="") as f:
-        r = csv.reader(f)
+        r = csv.reader(f, delimiter="\t" if path.suffix.lower() == ".txt" else ",")
         for i, row in enumerate(r):
             rows.append(row)
             if i + 1 >= n:
@@ -89,7 +89,7 @@ def summarize_alignment_table(path: Path) -> MSDialSummary:
     # Count feature rows (skip 5 header rows)
     n_features = 0
     with path.open("r", encoding="utf-8-sig", newline="") as f:
-        r = csv.reader(f)
+        r = csv.reader(f, delimiter="\t" if path.suffix.lower() == ".txt" else ",")
         for i, _ in enumerate(r):
             if i >= 5:
                 n_features += 1

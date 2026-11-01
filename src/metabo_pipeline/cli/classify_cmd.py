@@ -56,7 +56,7 @@ def classify(
     ),
     cache_path: str = typer.Option(
         None,
-        help="Cache file for InChIKey->taxonomy (default: package cache with 1500+ compounds)",
+        help="Cache file for InChIKey->taxonomy (default: writable user cache)",
     ),
     offline: bool = typer.Option(False, help="Use cache only; skip network calls"),
     timeout: float = typer.Option(15.0, help="Per-request timeout (seconds)"),

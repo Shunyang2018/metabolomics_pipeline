@@ -1,0 +1,7 @@
+Class,,,,,,,,,,,,,Sample,Sample,Blank
+File type,,,,,,,,,,,,,Sample,Sample,Sample
+Injection order,,,,,,,,,,,,,1,2,3
+Batch ID,,,,,,,,,,,,,1,1,1
+Alignment ID,Average Rt(min),Average Mz,Metabolite name,Adduct type,INCHIKEY,SMILES,Weighted dot product,Reverse dot product,Matched peaks count,S/N average,MS1 isotopic spectrum,MS/MS spectrum,demo_HILIC_crude_1_neg,demo_HILIC_crude_2_neg,demo_HILIC_blank_neg
+0,4.5,198,Demo library A,[M-H]-,AAAAAAAAAAAAAA-BBBBBBBBBB-C,,0.9,0.85,5,50,198:1000 199:50,50:100 80:200 120:300,1000,1200,10
+1,5.5,350,Unknown,[M-H]-,,,0.2,0.1,5,50,350:1000 351:50,50:100 80:200 120:300,1000,1200,10

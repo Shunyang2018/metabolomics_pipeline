@@ -26,6 +26,11 @@ def merge(
         help="Path to write merged CSV (default: INPUT_DIR/outputs/merged.csv)",
     ),
     recursive: bool = typer.Option(False, help="Recurse into subfolders"),
+    sample_token: list[str] | None = typer.Option(  # noqa: B008
+        None,
+        "--sample-token",
+        help="Real-sample token; repeat for multiple tokens (default: crude, mcx)",
+    ),
 ):
     """Merge HILIC/C18/Lipidomics files (wide format, one feature per row)."""
     # Use defaults from constants if not provided
@@ -48,7 +53,15 @@ def merge(
                 f"S/N={rec.get('after_snr')}, pass_any={rec.get('after_pass')}"
             )
 
-        summary = merge_folder_to_wide_csv(in_dir, out, recursive=recursive, progress=_progress)
+        summary = merge_folder_to_wide_csv(
+            in_dir,
+            out,
+            recursive=recursive,
+            progress=_progress,
+            real_sample_tokens=set(t.lower() for t in sample_token)
+            if sample_token
+            else constants.REAL_SAMPLE_TOKENS,
+        )
     except Exception as e:
         log.error(f"Failed to merge files from {in_dir}: {e}")
         raise typer.Exit(code=1) from e

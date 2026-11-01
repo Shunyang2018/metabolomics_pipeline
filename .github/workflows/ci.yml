@@ -1,5 +1,8 @@
 name: CI
 
+permissions:
+  contents: read
+
 on:
   push:
     branches: [main]
@@ -32,7 +35,7 @@ jobs:
       # uv sync installs from the committed uv.lock, so --no-sync below keeps
       # each step from re-resolving dependencies.
       - name: Install
-        run: uv sync --extra dev --python ${{ matrix.python-version }}
+        run: uv sync --locked --extra dev --python ${{ matrix.python-version }}
 
       - name: Lint
         run: uv run --no-sync ruff check .
@@ -42,3 +45,9 @@ jobs:
 
       - name: Test
         run: uv run --no-sync pytest --cov=metabo_pipeline --cov-report=term-missing
+
+      - name: Run public offline example
+        run: uv run --no-sync python examples/run_demo.py --output-dir outputs/ci-demo
+
+      - name: Build distribution
+        run: uv build

@@ -1,0 +1,12 @@
+{
+  "AAAAAAAAAAAAAA-BBBBBBBBBB-C": {
+    "cf_kingdom": "Synthetic taxonomy",
+    "cf_superclass": "Demo superclass A",
+    "cf_class": "Demo class A"
+  },
+  "CCCCCCCCCCCCCC-DDDDDDDDDD-E": {
+    "cf_kingdom": "Synthetic taxonomy",
+    "cf_superclass": "Demo superclass B",
+    "cf_class": "Demo class B"
+  }
+}
