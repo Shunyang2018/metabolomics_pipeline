@@ -50,3 +50,7 @@ M2 data/
 # SIRIUS credentials (keep private)
 .env.sirius
 !.env.sirius.template
+
+# Example fixtures are allow-listed above; runtime bytecode must stay ignored.
+examples/**/__pycache__/
+examples/**/*.py[cod]

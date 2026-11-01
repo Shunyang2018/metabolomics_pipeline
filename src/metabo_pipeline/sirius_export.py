@@ -78,10 +78,10 @@ def write_ms_files(
     out_dir.mkdir(parents=True, exist_ok=True)
     pos_path = out_dir / "sirius_unknown_pos.ms"
     neg_path = out_dir / "sirius_unknown_neg.ms"
-    if pos_entries:
-        pos_path.write_text("\n".join(pos_entries), encoding="utf-8")
-    if neg_entries:
-        neg_path.write_text("\n".join(neg_entries), encoding="utf-8")
+    # Empty polarities must replace prior exports too; otherwise a later run
+    # can silently submit compounds from an earlier dataset.
+    pos_path.write_text("\n".join(pos_entries), encoding="utf-8")
+    neg_path.write_text("\n".join(neg_entries), encoding="utf-8")
     return len(pos_entries), len(neg_entries)
 
 

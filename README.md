@@ -1,295 +1,131 @@
-# Metabolomics Pipeline (MS-DIAL Post-Processing)
+# Metabolomics Pipeline
 
 [![CI](https://github.com/Shunyang2018/metabolomics_pipeline/actions/workflows/ci.yml/badge.svg)](https://github.com/Shunyang2018/metabolomics_pipeline/actions/workflows/ci.yml)
-[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.11%20%7C%203.12-blue.svg)](https://www.python.org/)
-[![License](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
+[![Python](https://img.shields.io/badge/python-3.10%20%7C%203.12-blue)](pyproject.toml)
+[![License: MIT](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-Cross-platform (Windows/macOS/Linux) pipeline to parse MS-DIAL alignment outputs, apply QC filtering, harmonize sample columns, and export a merged matrix. The merge step also prepares SIRIUS input files for Level 3 unknowns, and results from SIRIUS and ClassyFire are joined back into a single annotated table.
+**An inspectable Python workflow for turning MS-DIAL alignment exports into quality-controlled, annotated feature tables.**
 
-## Status
-- Typer-based CLI with validate, merge, SIRIUS integration, ClassyFire classification, and bioactivity matching.
-- SIRIUS integration: exports `.ms` inputs from Level 3 unknowns and can drive SIRIUS runs via `metabo sirius`.
-- Configuration: thresholds centralized in `src/metabo_pipeline/constants.py`; paths from the environment (see [Configuration](#configuration)); SIRIUS task settings in `configs/sirius.yml`.
-- Tested: 285 tests over the QC, annotation-level, merge, dedup, SIRIUS export/collect, bioactivity and CLI layers, on Linux/macOS/Windows. Run with `pytest`.
+LC-MS studies often combine several chromatographic methods and polarities. This project handles the downstream work: filtering spectra and background, harmonizing sample names, retaining feature provenance, preparing unknowns for SIRIUS, and joining chemical taxonomy and reference matches. A modular Python API and Typer CLI expose each stage separately.
 
-## Quickstart
+The public example runs entirely offline and produces an HTML report, CSV outputs, and a machine-readable reproduction record. It uses synthetic data; no proprietary datasets or commercial reports are required.
 
-1) **Install uv** (if not already installed):
-   ```bash
-   # macOS/Linux
-   curl -LsSf https://astral.sh/uv/install.sh | sh
-
-   # Windows
-   powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-   ```
-
-2) **Setup and install** (uv handles everything):
-   ```bash
-   # Create virtual environment and install package
-   uv venv
-   uv pip install -e .
-   ```
-
-3) **Activate environment and run**:
-   - Windows (PowerShell): `.venv\Scripts\Activate.ps1`
-   - macOS/Linux: `source .venv/bin/activate`
-   - Then run: `metabo --help`
-
-**Quick commands:**
-- `metabo merge` (uses INPUT_DIR from constants.py, outputs to INPUT_DIR/outputs/)
-- `metabo merge /custom/path --output-dir /custom/output` (override paths)
-- Outputs include SIRIUS inputs: `outputs/sirius_unknown_pos.ms` and `outputs/sirius_unknown_neg.ms` built from Level 3 unknowns (m/z 150–800)
-
-## Configuration
-
-Thresholds live in `src/metabo_pipeline/constants.py`. Paths are read from the
-environment so a fresh checkout works without editing anything:
-
-| Variable | Default | Meaning |
-| --- | --- | --- |
-| `METABO_INPUT_DIR` | `data` | Directory of MS-DIAL alignment exports |
-| `METABO_BIOACTIVITY_DB` | `data/bioactivity_database.csv` | Bioactivity reference CSV (not distributed here) |
-| `SIRIUS_EXECUTABLE` | *(auto-detect)* | SIRIUS binary; left unset, PATH, `SIRIUS_HOME` and the usual per-platform install locations are searched |
-
-Each can also be overridden per invocation — `metabo merge <dir>`,
-`metabo bioactivity --db <path>`, `metabo sirius --sirius-exe <path>`.
-
-## Commands
-- `metabo run`: **run the complete pipeline** - merge → (classify + sirius in parallel) → final → bioactivity. One command to do it all!
-- `metabo merge`: combine multiple alignment tables into a wide matrix; writes `outputs/merged.csv` and SIRIUS `.ms` files for Level 3 unknowns.
-- `metabo classify`: classify Level 1/2 rows via ClassyFire API using unique InChIKeys.
-- `metabo sirius`: run SIRIUS on the exported `.ms` files (formula, fingerprint, structure, CANOPUS).
-- `metabo final`: create the final merged table combining MS-DIAL, ClassyFire, and SIRIUS results.
-- `metabo bioactivity`: match features against a bioactivity reference database via InChIKey skeleton; writes `outputs/bioactives.csv`.
-- `metabo classify-check`: probe a ClassyFire endpoint for availability/latency.
-
-## Inputs
-- MS-DIAL alignment tables (`*.csv`/`*.txt`) that include the four metadata rows: Class, File type, Injection order, Batch ID.
-- Optional: `samples.csv` with richer sample metadata (not required if embedded rows are sufficient).
-
-### Sample ID normalization
-- During merge, sample column headers are normalized to a common core by removing assay and polarity tokens and lowercasing. Examples:
-  - `M2_Lipids_TV_5+6_pos` -> `m2_tv_5+6`
-  - `M2_C18_TV_5+6_POS` -> `m2_tv_5+6`
-  - `M2_Hilic_PE_3+4_neg` -> `m2_pe_3+4`
-
-## Processing
-
-- Filtering: requires an MS/MS spectrum with at least 3 nonzero fragment ions; if `S/N average` is present, drops rows with S/N < 5.0.
-- Replicate-group QC (per file): groups inferred from normalized sample names (e.g., `m2_tv_1+2`). For each group:
-  - `blank_fold_<grp>` = max intensity across all sample replicates / mean of all blank columns (NaN if blanks missing or zero)
-  - `present_percent_<grp>` = percent of replicates with intensity > 0 (default = 60%; configurable via `PRESENT_PERCENT_MIN`)
-  - `cv_percent_<grp>` = CV among present replicates (requires at least 2 present; optional filter via `CV_PERCENT_MAX`)
-  - A feature passes a group if: blank_fold >= 7 and present_percent >= 60 (default `PRESENT_PERCENT_MIN`). When `CV_PERCENT_MAX` is set, cv_percent must also be <= that value. A row is kept if any group passes (`pass_any_groups`).
-- Merging (wide): union all passing rows, normalize sample columns to a common set across assays (HILIC/C18/Lipidomics), keep one column per biological sample.
-- Column order starts with identifiers and MS-DIAL metadata such as `feature_id`, `chrom`, `annotation_level`, `Alignment ID`, `Average Rt(min)`, `Average Mz`, `Metabolite name`, `Adduct type`, followed by other MS-DIAL fields, then sample columns, and finally QC metrics.
-- Level 3 handling: all Level 3 `Metabolite name` values are set to `Unknown` for clarity.
-- Deduplication: name conflicts are resolved within RT/m/z clusters; Level 3 rows are further reduced to representatives and restricted to m/z 150–800 for SIRIUS export.
-
-## SIRIUS Integration
-
-- Merge writes SIRIUS input files automatically:
-  - `outputs/sirius_unknown_pos.ms`
-  - `outputs/sirius_unknown_neg.ms`
-  These are built from Level 3 unknowns using the MS-DIAL `MS1 isotopic spectrum` and `MS/MS spectrum` columns and include metadata like precursor m/z, RT, adduct, and a stable `feature_id`.
-
-- Configure and run SIRIUS:
-  - Configure SIRIUS path in `src/metabo_pipeline/constants.py` (set `SIRIUS_EXECUTABLE`)
-  - Optional: edit `configs/sirius.yml` to adjust adducts, DBs, and tasks.
-  - Run SIRIUS on exported files:
-    - `metabo sirius` (uses defaults from constants.py)
-    - `metabo sirius --test-real-case` (quick test: 4 compounds, ~2-3 min, real SIRIUS execution)
-    - `metabo sirius --dry-run` (instant test: creates fake output without running SIRIUS)
-  - Merge results back (adds values, keeps original columns):
-    - `metabo final`
-    - Defaults: reuses `outputs/sirius_identifications.csv` if present (no progress bar). To force a rescan of folders, add `--rescan`.
-    - If `outputs/merged_classyfire.csv` exists, it is used automatically as the join target; output defaults to `<join>_final.csv`.
-
-## Bioactivity Matching
-
-- `metabo bioactivity` matches identified/tentatively-identified features against a reference
-  bioactivity database (any CSV with an `InChIKey` column, e.g. a natural-product bioactivity
-  database) and writes `outputs/bioactives.csv`.
-- Matching is done on the **first block of the InChIKey** (the 14-character skeleton hash before
-  the first hyphen), so a feature still matches the database even if stereochemistry, protonation
-  state, or isotope labeling differ slightly.
-- Output shape: one row per `(feature, sample it was detected in, bioactivity hit)` — i.e. MS-DIAL
-  feature identity + `sample_type` (the sample column name) + `intensity`, followed by every column
-  from the bioactivity database (`Molecule`, `Benefit`, `Endpoint`, `Evidence.Strength`, etc.). A
-  feature with several database hits (synonyms, multiple reported benefits) produces one row per
-  hit; only samples with nonzero intensity are included.
-- Configure the default database path via `BIOACTIVITY_DB_PATH` in `constants.py`, or override with
-  `metabo bioactivity --db /path/to/database.csv`.
-- Runs automatically as the last step of `metabo run` (skip with `--skip-bioactivity`).
-
-### Installing SIRIUS on Windows and macOS
-- Windows: Install SIRIUS to `C:\Program Files\SIRIUS\` or set `SIRIUS_HOME`; the CLI auto-detects common locations and honours `SIRIUS_EXECUTABLE`.
-- macOS: Place `sirius.app` under `/Applications` or `~/Applications`; the CLI resolves `<bundle>/Contents/MacOS/sirius` or use `--sirius-exe`/`SIRIUS_HOME` for custom installs.
-- Any platform: Keeping `sirius` on `PATH` works out-of-the-box and `metabo sirius` logs the executable it will run.
-
-### SIRIUS Authentication (Required for SIRIUS 6+)
-
-SIRIUS 6+ requires authentication to use the command-line tool. You need a free academic account from https://bio.informatik.uni-jena.de/sirius-register/.
-
-**⚠️ Important: Use GUI Login (Recommended)**
-
-Due to SSL certificate handling issues with CLI login, **login via SIRIUS GUI is required**:
-
-1. **Open SIRIUS application** (double-click `sirius.app` on macOS or run SIRIUS on Windows)
-
-2. **Login with your account:**
-   - Look for "Login" or "Account" in the menu
-   - Enter your email and password
-   - Wait for "Logged in" confirmation
-
-3. **Close SIRIUS** completely
-
-4. **Verify login worked:**
-   ```bash
-   /path/to/sirius login --show
-   ```
-   Should show your account info instead of "Not logged in"
-
-5. **Session persists** - you only need to login once; the session is saved and used by CLI commands
-
-**Note:** Login sessions may expire after ~24 hours. If `metabo sirius` fails with "Login ERROR", repeat the GUI login steps above.
-
-**Verify login status:**
-```bash
-/path/to/sirius login --show
+```mermaid
+flowchart LR
+    A[MS-DIAL alignment exports] --> B[Spectra and blank QC]
+    B --> C[Sample harmonization and feature matrix]
+    C --> D[ClassyFire taxonomy]
+    C --> E[SIRIUS input export]
+    E --> F[Optional external SIRIUS run]
+    D --> G[Annotation integration]
+    F --> G
+    G --> H[Reference matching and review]
 ```
 
-**Note:** Your SIRIUS login session is saved in `~/.sirius-6.3/` and persists across runs until it expires (typically 24 hours). If you see "Login ERROR: Please Login to use SIRIUS", simply repeat the GUI login steps above.
+## Run the public example
 
-## Quick Start: Full Pipeline in One Command
-
-The fastest way to run the entire pipeline:
+Install [uv](https://docs.astral.sh/uv/getting-started/installation/), then:
 
 ```bash
-# Activate environment (if not already active)
-source .venv/bin/activate  # macOS/Linux
-# or: .venv\Scripts\Activate.ps1  # Windows
-
-# Ensure SIRIUS is logged in (GUI login - see above)
-# Check: /path/to/sirius login --show
-
-# Run everything: merge → (classify + sirius in parallel) → final
-metabo run
+git clone https://github.com/Shunyang2018/metabolomics_pipeline.git
+cd metabolomics_pipeline
+uv sync --locked --extra dev --python 3.12
+uv run python examples/run_demo.py --output-dir outputs/demo
 ```
 
-**What `metabo run` does:**
-1. 📊 Merges MS-DIAL files into a single table
-2. 🔬 Runs ClassyFire (Level 1/2) and SIRIUS (Level 3) **in parallel** to save time
-3. 📋 Creates the final comprehensive table with all results
+Open `outputs/demo/report.html` in a browser. These commands work in PowerShell, macOS and Linux shells. Once dependencies are installed, the example makes no network calls and needs no SIRIUS installation or account.
 
-**Options:**
-- `metabo run --skip-merge` - Skip merge if you already have `merged.csv`
-- `metabo run --skip-classify` - Skip ClassyFire classification
-- `metabo run --skip-sirius` - Skip SIRIUS analysis
-- `metabo run --input-dir /path` - Custom input directory
-- `metabo run --output-dir /path` - Custom output directory
+| Stage | Expected feature count |
+| --- | ---: |
+| Two input tables | 8 |
+| MS/MS fragment filter | 7 |
+| Signal-to-noise filter | 6 |
+| Blank/presence QC | 5 |
+| Retained after deduplication | 5 |
 
-**Output:** `outputs/merged_classyfire_final.csv` - your final table! 🎉
+The five retained features have pipeline score categories 1/2/3 in counts 2/1/2. Two unknowns are exported for SIRIUS, one per polarity. Two features match the **illustrative** reference table, producing four feature/sample/reference rows. These are functional expectations, not scientific accuracy measurements. See [the example guide](examples/README.md).
 
----
+Outputs include `merged.csv`, `annotated.csv`, `reference_matches.csv`, POS/NEG `.ms` files, `manifest.json` with input hashes and effective thresholds, and `report.html`. Use a new output directory for a second run.
 
-## End-to-End Steps (Manual Control)
+## What the project demonstrates
 
-- Merge MS-DIAL alignment outputs to a single table and generate SIRIUS inputs:
-  - `metabo merge` (uses INPUT_DIR from constants.py)
+- Scientific data engineering across C18/HILIC/Lipidomics exports and ionization modes.
+- Testable QC and annotation rules, with stage counts and source-file provenance.
+- Separate adapters for external classification and structure-annotation tools.
+- Deterministic synthetic fixtures, regression tests, and multi-platform CI.
+- An offline report that lets a reviewer inspect both results and reproduction details.
 
-- Classify Level 1/2 compounds (writes a classified copy next to the input):
-  - `metabo classify outputs/merged.csv --join-merged`
-  - Result: `outputs/merged_classyfire.csv` (adds `cf_*` columns after `SMILES`)
-  - Reuse existing classified CSV by default (no extra API calls). Force a refresh with `--force-api`.
+This repository begins **after MS-DIAL alignment**, not at instrument raw files. It does not implement a spectral-library search engine, demonstrate commercial-scale performance, or establish biological activity. [Methods and limitations](docs/methods.md) describe the scientific assumptions.
 
-- Run SIRIUS on the exported `.ms` files (POS/NEG):
-  - `metabo sirius` (uses defaults from constants.py)
-  - `metabo sirius --test-real-case` (quick test: 4 compounds, ~2-3 min)
-  - `metabo sirius --dry-run` (instant test: fake outputs)
-  - `metabo sirius --force` (force re-run even if outputs exist)
+## Process your own data
 
-- Collect SIRIUS results into CSV for inspection (optional step):
-  - `metabo sirius-collect` (exports SIRIUS results from TSV summaries to `sirius_identifications.csv`)
-  - `metabo sirius-collect --force` (force re-scan, ignore cached extractions)
-  - This allows you to inspect SIRIUS annotations before merging into the final output
-  - Requires SIRIUS TSV summary directories (`sirius_pos/`, `sirius_neg/`)
-
-- Create the final merged table with all results (MS-DIAL + ClassyFire + SIRIUS):
-  - `metabo final` (uses defaults from constants.py)
-  - `metabo final --rescan` (force rescan of SIRIUS folders)
-  - If `outputs/merged_classyfire.csv` exists, this writes `outputs/merged_classyfire_final.csv` - your final comprehensive table!
-
-SIRIUS merge behavior
-- Keeps all original rows and columns. Only values are updated:
-  - `Metabolite name`: if a SIRIUS hit exists, set to `SIRIUS_<candidate_name>`.
-  - Adds CANOPUS classes (only new columns): `SIRIUS_canopus_superclass`, `SIRIUS_canopus_class`, `SIRIUS_canopus_most_specific`.
-  - Updates `annotation_level` where original is missing or `"3"`:
-    - Level `3`: SIRIUS has structure (SMILES and InChIKey).
-    - Level `4`: otherwise if SIRIUS has formula or CANOPUS classification.
-    - Level `5`: no structure, no formula/classification from SIRIUS.
-- Shows a progress bar (rich) and end-of-run stats.
-  - When reusing an existing identifications CSV, the progress bar is skipped and the tool derives POS/NEG counts and level distribution from the file.
-
-## Classification (ClassyFire)
-
-- Classify Level 1/2 rows via the Wishart lab ClassyFire API using InChIKeys:
-  - Full table with taxonomy columns added (writes `<input>_classyfire.csv` by default):
-    - `metabo classify outputs/merged.csv --join-merged`
-  - Compact lookup (id + taxonomy only):
-    - `metabo classify outputs/merged.csv --results-only true`
-- Notes:
-  - Default timeout: 15s; adjust pacing with `--sleep-sec`, retries with `--retries`.
-  - `--join-merged` adds `cf_*` columns into the table (inserted after `SMILES` when present). Keep your input safe by writing to a new path or accept the derived `<input>_classyfire.csv`.
-  - Caching: results are cached at `src/metabo_pipeline/classyfire_cache.json`, which ships with the package pre-seeded with ~2,400 classified InChIKeys. Re-runs reuse cached keys and only query missing ones. Use `--cache-path` to write the cache elsewhere (keeping your checkout clean) or to change format (`.json` or `.yaml`).
-  - Endpoint: defaults to `http://classyfire.wishartlab.com`. Use `metabo classify-check` to probe availability.
-
-## Project structure
-
-```
-├── src/metabo_pipeline/
-│   ├── cli/                 # Typer commands, one module per subcommand
-│   ├── io_msdial.py         # Read MS-DIAL exports and their metadata rows
-│   ├── qc.py                # MS/MS ion counts, replicate grouping, QC metrics
-│   ├── annotations.py       # Level 1/2/3 assignment
-│   ├── merge.py             # Filter, harmonize samples, write the wide matrix
-│   ├── dedup.py             # Level 3 representative selection
-│   ├── sirius_export.py     # Build and write .ms inputs
-│   ├── sirius_collect.py    # Parse SIRIUS result directories
-│   ├── classify.py          # ClassyFire client and cache
-│   ├── bioactivity.py       # Match features to a bioactivity database
-│   └── constants.py         # All QC thresholds and defaults
-├── configs/sirius.yml       # SIRIUS adducts, databases, tasks
-├── scripts/preview_merge.py # Inspect a merge without writing output
-└── tests/                   # Unit and end-to-end tests
-```
-
-## Development
+An export must have four metadata rows, followed by the column header on row five. Sample intensities follow `MS/MS spectrum`. Supported inputs are comma-delimited `.csv` and tab-delimited `.txt`. Filenames must contain `POS` or `NEG` to identify polarity. See the [input contract](docs/input-format.md).
 
 ```bash
-uv sync --extra dev
-uv run pytest                 # run the suite
-uv run ruff check .           # lint
-uv run ruff format .          # format
-pre-commit install            # optional: run the same checks on commit
+uv run metabo validate /path/to/C18_pos.csv
+uv run metabo merge /path/to/alignments --output outputs/study/merged.csv
 ```
 
-Ruff handles linting, import sorting and formatting; there is no separate
-black/isort step. CI runs the suite on Linux, macOS and Windows against Python
-3.10 and 3.12, matching the cross-platform claim above.
+The default real-sample vocabulary is `crude` and `mcx`. For other sample names, pass one or more tokens explicitly:
 
-Tests cover the pure logic - MS-DIAL parsing, QC metrics and thresholds,
-annotation levels, sample-name harmonization, Level 3 deduplication, SIRIUS
-`.ms` generation, bioactivity matching - plus an end-to-end merge over synthetic
-MS-DIAL exports and every `metabo` subcommand driven through Typer's
-`CliRunner`. Nothing in the suite contacts SIRIUS or the ClassyFire API, so it
-runs anywhere in a couple of seconds. What remains uncovered is the code that
-genuinely needs those external services: the SIRIUS subprocess driver, the
-result-directory parser, and the HTTP client.
+```bash
+uv run metabo merge /path/to/alignments --sample-token case --sample-token control --output outputs/study/merged.csv
+```
 
-Data files are git-ignored (`M2_*.csv`, data folders, archives), and line
-endings are normalized via `.gitattributes`.
+Within an input table, normalized sample names must be unique. Across tables, matching names align into shared columns. Unrecognized sample vocabulary raises an error rather than bypassing QC. Blank names must contain a separate `blank`, `mb`, or `resuspension` token. Missing or zero blank baselines yield undefined fold changes and do not pass QC.
 
-## License
+To run merge and reference matching without external services:
 
-MIT - see [LICENSE](LICENSE).
+```bash
+uv run metabo run --input-dir /path/to/alignments --output-dir outputs/new-study --skip-classify --skip-sirius --bioactivity-db /path/to/reference.csv
+```
+
+Use `--skip-bioactivity` when no reference database is available. `run` requires a fresh output directory unless explicitly resuming with `--skip-merge`; skipped stages are not read from old caches. A failed external stage returns a nonzero exit code.
+
+## Optional annotation services
+
+| Command | Purpose |
+| --- | --- |
+| `metabo classify INPUT --join-merged` | Append taxonomy from ClassyFire |
+| `metabo classify INPUT --offline --cache-path CACHE --join-merged` | Use an explicit JSON taxonomy cache only |
+| `metabo sirius --output-dir OUTPUTS --sirius-exe PATH` | Run an installed SIRIUS adapter on exported unknowns |
+| `metabo sirius-collect --help` | Inspect/collect external SIRIUS result summaries |
+| `metabo final --output-dir OUTPUTS` | Join existing annotation results |
+| `metabo bioactivity INPUT --db REFERENCE --output OUTPUT` | Match reference records on InChIKey connectivity |
+| `metabo run --help` | Orchestrate merge, external annotation, final integration and reference matching |
+
+Run commands as `uv run metabo ...` or `uv run python -m metabo_pipeline ...`.
+
+ClassyFire requires a reachable endpoint for uncached keys; use offline mode for reproducible review. Downloaded results default to a writable user cache, or an explicit `--cache-path`. No real taxonomy cache is bundled. SIRIUS is separately installed and licensed; account requirements, available tasks, and CLI compatibility depend on that installation. The offline suite does **not** verify live SIRIUS or ClassyFire operation. See [external integrations](docs/integrations.md).
+
+Environment defaults: `METABO_INPUT_DIR` (default `data`), `METABO_BIOACTIVITY_DB` (default `data/bioactivity_database.csv`), and `SIRIUS_EXECUTABLE` (otherwise auto-detected). CLI paths override defaults. QC thresholds are in [`constants.py`](src/metabo_pipeline/constants.py).
+
+## Explore the implementation
+
+| Module | Responsibility |
+| --- | --- |
+| [`merge.py`](src/metabo_pipeline/merge.py) | QC stages, sample harmonization, source provenance and matrix output |
+| [`qc.py`](src/metabo_pipeline/qc.py) | Fragment counts, sample groups and QC metrics |
+| [`annotations.py`](src/metabo_pipeline/annotations.py) | Explicit spectral-score categories |
+| [`dedup.py`](src/metabo_pipeline/dedup.py) | Unknown-feature representative selection |
+| [`sirius_export.py`](src/metabo_pipeline/sirius_export.py) / [`sirius_collect.py`](src/metabo_pipeline/sirius_collect.py) | SIRIUS format boundaries |
+| [`classify.py`](src/metabo_pipeline/classify.py) / [`bioactivity.py`](src/metabo_pipeline/bioactivity.py) | Taxonomy and reference joins |
+| [`reporting.py`](src/metabo_pipeline/reporting.py) | Portable HTML run summaries |
+| [`examples/run_demo.py`](examples/run_demo.py) | Reproducible offline example and manifest |
+
+## Development and validation
+
+```bash
+uv sync --locked --extra dev
+uv run ruff check .
+uv run ruff format --check .
+uv run pytest --cov=metabo_pipeline --cov-report=term-missing
+```
+
+CI runs on Linux, macOS and Windows with Python 3.10 and 3.12, and executes the public example. Tests cover parsing, filtering, annotation, deduplication, export/result parsing, CLI behavior, stale-output regressions and the offline demonstration. Passing synthetic tests validates software behavior; it is not evidence of identification accuracy on experimental datasets.
+
+Contributions are welcome; see [CONTRIBUTING.md](CONTRIBUTING.md), [the review record](docs/review.md), and [CHANGELOG.md](CHANGELOG.md). Cite the software using [CITATION.cff](CITATION.cff). Original contributors remain recorded in Git history.
+
+## License and data
+
+Source code is under the [MIT license](LICENSE). The bundled example fixtures are synthetic, created for this repository and released under the same license. External software, database records and service responses retain their own terms; they are not relicensed by this project. See [data and dependency provenance](docs/data-and-dependencies.md).

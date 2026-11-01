@@ -53,6 +53,11 @@ def _check_sirius_login(sirius_exe: str) -> None:
     FileNotFoundError traceback from subprocess.
     """
     log.info("Checking SIRIUS login status...")
+    import shutil
+
+    if not Path(sirius_exe).is_file() and shutil.which(sirius_exe) is None:
+        log.error(f"SIRIUS executable not found: {sirius_exe}")
+        raise typer.Exit(code=2)
     try:
         login_check = subprocess.run(
             [sirius_exe, "login", "--show"], capture_output=True, text=True, timeout=30
@@ -123,7 +128,8 @@ def sirius(
 ):
     """Run SIRIUS on the exported POS/NEG .ms files with identification and classification tasks.
 
-    Runs: formulas, fingerprints, structures, canopus. Uses Orbitrap profile and your adduct lists.
+    Tasks come from the configuration. Verify scientific settings in SIRIUS logs;
+    this adapter does not forward historical profile/adduct configuration blocks.
 
     Quick test options:
     - --dry-run: Create fake outputs without running SIRIUS (instant)
@@ -207,8 +213,17 @@ def sirius(
         cores = cfg_yaml.get("sirius", {}).get("cores") or constants.SIRIUS_CORES
     if mzdev_ppm is None:
         mzdev_ppm = cfg_yaml.get("sirius", {}).get("mzdev_ppm") or constants.SIRIUS_MZDEV_PPM
+    if mzdev_ppm is not None:
+        log.warn(
+            "mzdev_ppm is not forwarded by this SIRIUS adapter; verify mass tolerances in SIRIUS settings/logs."
+        )
 
-    sirius_exe, exe_note = guess_sirius_executable(sirius_exe)
+    # An explicit path is authoritative; falling back could launch a different
+    # local installation after a user made a typo.
+    if sirius_exe:
+        exe_note = "configured"
+    else:
+        sirius_exe, exe_note = guess_sirius_executable()
     note = f" (source: {exe_note})" if exe_note else ""
     log.info(f"Using SIRIUS executable: {sirius_exe}{note}")
     if not Path(sirius_exe).exists():
@@ -219,6 +234,14 @@ def sirius(
     # Check if SIRIUS is logged in (required for SIRIUS 6+).
     # Skipped under --dry-run, which is documented as producing output without
     # running SIRIUS at all - and so must work on a machine with no install.
+    inputs_with_compounds = {
+        mode
+        for mode, name in (("POS", pos_ms), ("NEG", neg_ms))
+        if Path(name).is_file() and ">compound" in Path(name).read_text(encoding="utf-8")
+    }
+    if not inputs_with_compounds:
+        log.info("No SIRIUS compounds to process")
+        return
     if dry_run:
         log.info("Dry run: skipping SIRIUS login check")
     else:
@@ -232,6 +255,9 @@ def sirius(
     def run_sirius(ms_path: Path, out_dir: Path, mode: str, force_rerun: bool = False) -> int:
         if not ms_path.exists():
             log.warn(f"Missing .ms file: {ms_path}")
+            return 0
+        if not ms_path.read_text(encoding="utf-8").strip():
+            log.info(f"No compounds for {mode}; skipping empty .ms file")
             return 0
 
         # Resolve absolute paths to avoid SIRIUS writing under Program Files
@@ -256,6 +282,10 @@ def sirius(
                 log.info(f"SIRIUS output already exists ({mode}): {out_dir}")
                 log.info(f"  Size: {out_dir.stat().st_size / (1024**2):.1f} MB")
                 log.info("  Skipping SIRIUS run. Use --force to re-run.")
+                summary_dir = out_dir.parent / out_dir.stem
+                if not list(summary_dir.glob("*.tsv")):
+                    if not export_tsv_summaries(out_dir, summary_dir, sirius_exe):
+                        return 0
                 return 1  # Return 1 to indicate success (output exists)
 
         # SIRIUS 6: Command-line options are very limited
@@ -276,6 +306,7 @@ def sirius(
         log.info(f"Running SIRIUS ({mode}) → {out_dir}")
         log.info(f"Command: {' '.join(cmd[:5])}... (+ {len(cmd) - 5} more args)")
 
+        process = None
         try:
             # Use Popen to track the process for proper cleanup
             global _sirius_processes
@@ -347,6 +378,7 @@ def sirius(
                     "  TSV summary export failed - you can still inspect the .sirius database directly"
                 )
                 log.warn("  Or run 'metabo sirius-collect' after logging in via SIRIUS GUI")
+                return 0
 
             # Store result for error checking
             result = type(
@@ -424,9 +456,10 @@ def sirius(
                 _sirius_processes.remove(process)
             return 0
 
-    ran = 0
-    ran += run_sirius(Path(neg_ms), Path(out_neg), "NEG", force_rerun=force)
-    ran += run_sirius(Path(pos_ms), Path(out_pos), "POS", force_rerun=force)
-    if ran == 0:
+    outcomes = {
+        "NEG": run_sirius(Path(neg_ms), Path(out_neg), "NEG", force_rerun=force),
+        "POS": run_sirius(Path(pos_ms), Path(out_pos), "POS", force_rerun=force),
+    }
+    if any(not outcomes[mode] for mode in inputs_with_compounds):
         raise typer.Exit(code=1)
     log.ok("SIRIUS runs finished. Check outputs for identification and classification.")

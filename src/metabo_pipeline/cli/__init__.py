@@ -11,6 +11,7 @@ from .merge_cmd import merge
 from .run_cmd import run
 from .sirius_cmd import sirius
 from .sirius_collect_cmd import sirius_collect
+from .validate_cmd import validate
 
 # Create the main CLI app
 app = typer.Typer(add_completion=False, help="Metabolomics pipeline for MS-DIAL outputs.")
@@ -24,5 +25,6 @@ app.command()(sirius)
 app.command("sirius-collect")(sirius_collect)
 app.command()(final)
 app.command()(bioactivity)
+app.command()(validate)
 
 __all__ = ["app"]

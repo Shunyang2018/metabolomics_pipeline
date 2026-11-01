@@ -156,9 +156,9 @@ class TestMerge:
         assert summary["files"] == 1
         assert out.exists()
 
-    def test_empty_input_directory_does_not_crash(self, input_dir, tmp_path):
-        summary, _ = self._run(input_dir, tmp_path)
-        assert summary["files"] == 0
+    def test_empty_input_directory_is_reported(self, input_dir, tmp_path):
+        with pytest.raises(ValueError, match="No MS-DIAL"):
+            self._run(input_dir, tmp_path)
 
     def test_sirius_inputs_are_written_for_unknowns(self, input_dir, tmp_path):
         write_msdial(
